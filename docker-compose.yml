@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: etra-postgres
+    environment:
+      POSTGRES_DB: etra_cti
+      POSTGRES_USER: etra
+      POSTGRES_PASSWORD: etra_secret
+    ports:
+      - "55432:5432"
+    volumes:
+      - etra_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U etra"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  etra_pgdata:
