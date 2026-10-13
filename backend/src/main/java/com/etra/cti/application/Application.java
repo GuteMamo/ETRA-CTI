@@ -2,15 +2,11 @@ package com.etra.cti.application;
 
 import com.etra.cti.common.BaseEntity;
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.Setter;
 
 import java.util.UUID;
 
 @Entity
 @Table(name = "applications")
-@Getter
-@Setter
 public class Application extends BaseEntity {
 
     @Column(name = "project_id", nullable = false)
@@ -36,4 +32,25 @@ public class Application extends BaseEntity {
 
     @Column(name = "owner_id")
     private UUID ownerId;
+
+    public UUID getProjectId() { return projectId; }
+    public void setProjectId(UUID projectId) { this.projectId = projectId; }
+
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
+
+    public ApplicationType getType() { return type; }
+    public void setType(ApplicationType type) { this.type = type; }
+
+    public Environment getEnvironment() { return environment; }
+    public void setEnvironment(Environment environment) { this.environment = environment; }
+
+    public Criticality getCriticality() { return criticality; }
+    public void setCriticality(Criticality criticality) { this.criticality = criticality; }
+
+    public String getBaseUrl() { return baseUrl; }
+    public void setBaseUrl(String baseUrl) { this.baseUrl = baseUrl; }
+
+    public UUID getOwnerId() { return ownerId; }
+    public void setOwnerId(UUID ownerId) { this.ownerId = ownerId; }
 }

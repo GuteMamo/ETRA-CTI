@@ -1,6 +1,10 @@
 spring:
   application:
     name: etra-cti
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 100MB
   datasource:
     url: jdbc:postgresql://127.0.0.1:55432/etra_cti
     username: etra
@@ -15,6 +19,8 @@ spring:
       ddl-auto: validate
     properties:
       hibernate:
+        type:
+          json_format_mapper: jackson
         format_sql: true
         jdbc:
           batch_size: 50
@@ -34,13 +40,24 @@ etra:
     refresh-token-expiry: 604800000
   cors:
     allowed-origins: http://localhost:3000
+  evidence:
+    storage-path: "${EVIDENCE_PATH:C:/dev/etra-cti/evidence}"
+  ai:
+    api-key: ${OPENAI_API_KEY:}
+    model: gpt-4o-mini
 
 management:
   endpoints:
     web:
       exposure:
         include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
 
 logging:
   level:
     com.etra.cti: DEBUG
+    com.etra.cti.detection: DEBUG
+    com.etra.cti.event: DEBUG
+    org.hibernate.SQL: DEBUG

@@ -1,1 +1,52 @@
+# ==================== SECRETS ====================
 .env
+.env.local
+.env.*.local
+
+# ==================== JAVA / SPRING ====================
+backend/target/
+*.class
+*.jar
+!backend/.mvn/wrapper/maven-wrapper.jar
+
+# ==================== NODE / REACT ====================
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/.next/
+frontend/.turbo/
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ==================== EVIDENCE (test uploads) ====================
+evidence/
+
+# ==================== SAMPLE TEST FILES ====================
+payload.json
+burp-sample.xml
+zap-sample.json
+nmap-sample.xml
+mobsf-sample.json
+
+# ==================== IDE ====================
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+.settings/
+.classpath
+.project
+
+# ==================== OS ====================
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# ==================== LOGS ====================
+*.log
+logs/
+
+# ==================== BACKUP FOLDERS ====================
+.git-backup/
