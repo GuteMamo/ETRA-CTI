@@ -4,20 +4,27 @@ import com.etra.cti.application.Application;
 import com.etra.cti.application.ApplicationRepository;
 import com.etra.cti.audit.AuditService;
 import com.etra.cti.common.exception.NotFoundException;
+import com.etra.cti.detection.Severity;
 import com.etra.cti.finding.dto.CreateFindingRequest;
 import com.etra.cti.finding.dto.FindingDto;
+import com.etra.cti.finding.dto.OverridePriorityRequest;
 import com.etra.cti.remediation.Remediation;
 import com.etra.cti.remediation.RemediationRepository;
 import com.etra.cti.remediation.RemediationStatus;
 import com.etra.cti.remediation.kb.RemediationAdvisor;
+import jakarta.persistence.criteria.Predicate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -28,6 +35,8 @@ public class FindingService {
 
     private final FindingRepository findings;
     private final ApplicationRepository apps;
+    private final com.etra.cti.project.ProjectRepository projects;
+    private final com.etra.cti.organization.OrganizationService orgService;
     private final RiskEngine riskEngine;
     private final AuditService audit;
     private final RemediationRepository remediations;
@@ -35,12 +44,16 @@ public class FindingService {
 
     public FindingService(FindingRepository findings,
                           ApplicationRepository apps,
+                          com.etra.cti.project.ProjectRepository projects,
+                          com.etra.cti.organization.OrganizationService orgService,
                           RiskEngine riskEngine,
                           AuditService audit,
                           RemediationRepository remediations,
                           RemediationAdvisor advisor) {
         this.findings = findings;
         this.apps = apps;
+        this.projects = projects;
+        this.orgService = orgService;
         this.riskEngine = riskEngine;
         this.audit = audit;
         this.remediations = remediations;
@@ -51,6 +64,12 @@ public class FindingService {
     public FindingDto create(CreateFindingRequest req, UUID createdBy) {
         Application app = apps.findById(req.applicationId())
             .orElseThrow(() -> new NotFoundException("Application not found"));
+
+        if (createdBy != null) {
+            com.etra.cti.project.Project project = projects.findById(app.getProjectId())
+                .orElseThrow(() -> new NotFoundException("Project not found"));
+            orgService.requireMember(project.getOrganizationId(), createdBy);
+        }
 
         Finding f = new Finding();
         f.setReference(nextReference());
@@ -70,7 +89,7 @@ public class FindingService {
         var risk = riskEngine.calculate(req.severity(), req.confidence(), app, 1.0);
         f.setRiskScore(risk.score());
         f.setRiskBand(risk.band());
-        findings.save(f);
+        findings.saveAndFlush(f);
 
         // ===== AUTO-GENERATE REMEDIATION for HIGH/CRITICAL =====
         if (req.severity() == com.etra.cti.detection.Severity.HIGH
@@ -129,6 +148,36 @@ public class FindingService {
         return findings.findAllByOrderByRiskScoreDesc(pageable).map(FindingDto::from);
     }
 
+    public Page<FindingDto> list(UUID applicationId,
+                                 FindingStatus status,
+                                 Severity severity,
+                                 UUID assignedTo,
+                                 Boolean overdue,
+                                 Pageable pageable) {
+        Specification<Finding> spec = (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            if (applicationId != null) {
+                predicates.add(cb.equal(root.get("applicationId"), applicationId));
+            }
+            if (status != null) {
+                predicates.add(cb.equal(root.get("status"), status));
+            }
+            if (severity != null) {
+                predicates.add(cb.equal(root.get("severity"), severity));
+            }
+            if (assignedTo != null) {
+                predicates.add(cb.equal(root.get("assignedTo"), assignedTo));
+            }
+            if (Boolean.TRUE.equals(overdue)) {
+                predicates.add(cb.isNotNull(root.get("dueDate")));
+                predicates.add(cb.lessThan(root.get("dueDate"), Instant.now()));
+                predicates.add(cb.not(root.get("status").in(FindingStatus.VERIFIED, FindingStatus.CLOSED)));
+            }
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+        return findings.findAll(spec, pageable).map(FindingDto::from);
+    }
+
     public Page<FindingDto> listByApplication(UUID appId, Pageable pageable) {
         return findings.findByApplicationIdOrderByRiskScoreDesc(appId, pageable).map(FindingDto::from);
     }
@@ -152,21 +201,71 @@ public class FindingService {
 
     @Transactional
     public FindingDto assign(UUID id, UUID assignedTo) {
+        return assign(id, assignedTo, null, null);
+    }
+
+    @Transactional
+    public FindingDto assign(UUID id, UUID assignedTo, Instant dueDate, UUID actorId) {
         Finding f = findings.findById(id).orElseThrow(() -> new NotFoundException("Finding not found"));
         UUID oldAssignee = f.getAssignedTo();
+        Instant oldDue = f.getDueDate();
         f.setAssignedTo(assignedTo);
+        if (dueDate != null) {
+            f.setDueDate(dueDate);
+        }
         if (f.getStatus() == FindingStatus.OPEN) {
             f.setStatus(FindingStatus.ASSIGNED);
         }
         findings.save(f);
-        audit.recordChange(null, "FINDING_ASSIGNED", "Finding", id.toString(),
-            oldAssignee == null ? Map.of() : Map.of("assignedTo", oldAssignee),
-            Map.of("assignedTo", assignedTo));
+        audit.recordChange(actorId, "FINDING_ASSIGNED", "Finding", id.toString(),
+            oldAssignee == null ? Map.of() : Map.of("assignedTo", oldAssignee, "dueDate", oldDue == null ? "none" : oldDue.toString()),
+            Map.of("assignedTo", assignedTo, "dueDate", f.getDueDate() == null ? "none" : f.getDueDate().toString()));
         return FindingDto.from(f);
     }
 
-    private String nextReference() {
+    @Transactional
+    public FindingDto setDueDate(UUID id, Instant dueDate, UUID actorId) {
+        Finding f = findings.findById(id).orElseThrow(() -> new NotFoundException("Finding not found"));
+        Instant oldDue = f.getDueDate();
+        f.setDueDate(dueDate);
+        findings.save(f);
+        audit.recordChange(actorId, "FINDING_DUE_DATE_UPDATED", "Finding", id.toString(),
+            Map.of("dueDate", oldDue == null ? "none" : oldDue.toString()),
+            Map.of("dueDate", dueDate == null ? "none" : dueDate.toString()));
+        return FindingDto.from(f);
+    }
+
+    @Transactional
+    public FindingDto overridePriority(UUID id, OverridePriorityRequest req, UUID actorId) {
+        Finding f = findings.findById(id).orElseThrow(() -> new NotFoundException("Finding not found"));
+        Severity oldSev = f.getSeverity();
+        BigDecimal oldScore = f.getRiskScore();
+
+        f.setSeverity(req.severity());
+        f.setPriorityOverrideReason(req.reason());
+
+        Application app = apps.findById(f.getApplicationId()).orElse(null);
+        var risk = riskEngine.calculate(req.severity(), f.getConfidence(), app, 1.0);
+        f.setRiskScore(risk.score());
+        f.setRiskBand(risk.band());
+        findings.save(f);
+
+        audit.recordChange(actorId, "FINDING_PRIORITY_OVERRIDDEN", "Finding", id.toString(),
+            Map.of("severity", oldSev.name(), "riskScore", oldScore != null ? oldScore : 0),
+            Map.of("severity", req.severity().name(), "riskScore", risk.score(), "reason", req.reason()));
+
+        log.info(">>> Finding {} priority overridden to {} by manager {}: {}",
+            f.getReference(), req.severity(), actorId, req.reason());
+        return FindingDto.from(f);
+    }
+
+    public synchronized String nextReference() {
         long n = findings.count() + 1;
-        return String.format("ETRA-%05d", n);
+        String ref = String.format("ETRA-%05d", n);
+        while (findings.existsByReference(ref)) {
+            n++;
+            ref = String.format("ETRA-%05d", n);
+        }
+        return ref;
     }
 }

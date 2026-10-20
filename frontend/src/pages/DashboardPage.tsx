@@ -1,4 +1,4 @@
-﻿import { useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import {
   AlertTriangle, Swords, Search, Shield, TrendingUp, Activity
 } from "lucide-react";
@@ -29,13 +29,7 @@ export function DashboardPage() {
 
   const appsQ = useQuery({
     queryKey: ["apps-all"],
-    queryFn: async () => {
-      const orgs = (await api.get("/organizations")).data as { id: string }[];
-      if (!orgs.length) return [];
-      const projects = (await api.get(`/organizations/${orgs[0].id}/projects`)).data as { id: string }[];
-      if (!projects.length) return [];
-      return (await api.get(`/projects/${projects[0].id}/applications`)).data as unknown[];
-    },
+    queryFn: async () => (await api.get<unknown[]>("/applications")).data,
   });
 
   const findings = findingsQ.data?.content ?? [];

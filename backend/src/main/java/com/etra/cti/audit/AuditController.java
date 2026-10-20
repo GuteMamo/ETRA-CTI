@@ -12,8 +12,8 @@ import java.util.List;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/api/audit")
-@PreAuthorize("hasAnyRole('ADMIN','SECURITY_MANAGER')")
+@RequestMapping({"/api/audit", "/api/audit-logs"})
+@PreAuthorize("hasAnyRole('ADMIN','SECURITY_MANAGER','ANALYST','VIEWER')")
 public class AuditController {
 
     private final AuditService service;

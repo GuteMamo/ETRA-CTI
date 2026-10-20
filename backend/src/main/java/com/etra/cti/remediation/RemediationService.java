@@ -6,8 +6,12 @@ import com.etra.cti.finding.Finding;
 import com.etra.cti.finding.FindingRepository;
 import com.etra.cti.finding.FindingStatus;
 import com.etra.cti.remediation.dto.*;
+import com.etra.cti.user.User;
+import com.etra.cti.user.UserRepository;
+import com.etra.cti.user.UserRole;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,15 +28,18 @@ public class RemediationService {
     private final RemediationRepository remediations;
     private final RetestRepository retests;
     private final FindingRepository findings;
+    private final UserRepository users;
     private final AuditService audit;
 
     public RemediationService(RemediationRepository remediations,
                               RetestRepository retests,
                               FindingRepository findings,
+                              UserRepository users,
                               AuditService audit) {
         this.remediations = remediations;
         this.retests = retests;
         this.findings = findings;
+        this.users = users;
         this.audit = audit;
     }
 
@@ -66,8 +73,11 @@ public class RemediationService {
     public RemediationDto markFixed(UUID findingId, MarkFixedRequest req) {
         Finding f = findings.findById(findingId)
             .orElseThrow(() -> new NotFoundException("Finding not found"));
-        Remediation r = remediations.findByFindingId(findingId)
-            .orElseThrow(() -> new NotFoundException("Remediation not started"));
+        Remediation r = remediations.findByFindingId(findingId).orElseGet(() -> {
+            Remediation nr = new Remediation();
+            nr.setFindingId(findingId);
+            return nr;
+        });
 
         r.setStatus(RemediationStatus.READY_FOR_RETEST);
         r.setFixNotes(req.fixNotes());
@@ -91,6 +101,14 @@ public class RemediationService {
         Finding f = findings.findById(findingId)
             .orElseThrow(() -> new NotFoundException("Finding not found"));
         Remediation r = remediations.findByFindingId(findingId).orElse(null);
+
+        // Enforce separation of duties: developer cannot independently verify their own fix
+        if (r != null && r.getDeveloperId() != null && r.getDeveloperId().equals(performedBy)) {
+            User verifier = users.findById(performedBy).orElse(null);
+            if (verifier != null && verifier.getRole() == UserRole.DEVELOPER) {
+                throw new AccessDeniedException("Separation of duties: Developers cannot independently verify their own remediation fixes.");
+            }
+        }
 
         Retest rt = new Retest();
         rt.setFindingId(findingId);
@@ -125,7 +143,7 @@ public class RemediationService {
         findings.save(f);
 
         audit.record(performedBy, "RETEST_PERFORMED", "Finding", findingId.toString(),
-            Map.of("result", req.result().name()));
+            Map.of("result", req.result().name(), "notes", req.notes() != null ? req.notes() : ""));
 
         return RetestDto.from(rt);
     }

@@ -14,10 +14,13 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api")
-@RequiredArgsConstructor
 public class AssetController {
 
     private final AssetService service;
+
+    public AssetController(AssetService service) {
+        this.service = service;
+    }
 
     @PostMapping("/applications/{appId}/assets")
     @ResponseStatus(HttpStatus.CREATED)
@@ -31,5 +34,16 @@ public class AssetController {
     public List<AssetDto> list(@PathVariable UUID appId,
                                @AuthenticationPrincipal JwtAuthFilter.AuthedUser me) {
         return service.list(appId, me.id());
+    }
+
+    @GetMapping("/assets")
+    public List<AssetDto> listAll(@AuthenticationPrincipal JwtAuthFilter.AuthedUser me) {
+        return service.listAll(me.id());
+    }
+
+    @GetMapping("/assets/{id}")
+    public AssetDto get(@PathVariable UUID id,
+                        @AuthenticationPrincipal JwtAuthFilter.AuthedUser me) {
+        return service.get(id, me.id());
     }
 }

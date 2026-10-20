@@ -16,6 +16,8 @@ public record FindingDto(
     Severity severity, BigDecimal confidence,
     FindingStatus status, String source,
     UUID assignedTo,
+    Instant dueDate,
+    String priorityOverrideReason,
     BigDecimal riskScore, String riskBand,
     Instant createdAt
 ) {
@@ -28,6 +30,8 @@ public record FindingDto(
             f.getSeverity(), f.getConfidence(),
             f.getStatus(), f.getSource(),
             f.getAssignedTo(),
+            f.getDueDate(),
+            f.getPriorityOverrideReason(),
             f.getRiskScore(), f.getRiskBand(),
             f.getCreatedAt()
         );

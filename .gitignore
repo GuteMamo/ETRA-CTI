@@ -20,7 +20,7 @@ yarn-error.log*
 pnpm-debug.log*
 
 # ==================== EVIDENCE (test uploads) ====================
-evidence/
+/evidence/
 
 # ==================== SAMPLE TEST FILES ====================
 payload.json

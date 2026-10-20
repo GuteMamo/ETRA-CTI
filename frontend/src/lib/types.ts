@@ -1,4 +1,4 @@
-﻿export type Severity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+export type Severity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 export type RiskBand = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 export type FindingStatus =
   | "OPEN" | "CONFIRMED" | "FALSE_POSITIVE" | "ASSIGNED" | "IN_PROGRESS"
@@ -21,7 +21,7 @@ export type MobilePlatform = "ANDROID" | "IOS";
 export interface LoginRequest { email: string; password: string; }
 export interface RegisterRequest { email: string; password: string; fullName: string; }
 export interface TokenPair { accessToken: string; refreshToken: string; }
-export interface UserDto { id: string; email: string; fullName: string; role: UserRole; }
+export interface UserDto { id: string; email: string; fullName: string; role: UserRole; enabled?: boolean; }
 
 export interface OrganizationDto { id: string; name: string; slug: string; myRole: UserRole; }
 export interface ProjectDto { id: string; organizationId: string; name: string; description?: string; }
@@ -55,6 +55,8 @@ export interface FindingDto {
   severity: Severity; confidence?: number;
   status: FindingStatus; source?: string;
   assignedTo?: string | null;
+  dueDate?: string | null;
+  priorityOverrideReason?: string | null;
   riskScore?: number; riskBand?: RiskBand;
   createdAt: string;
 }
@@ -163,3 +165,68 @@ export interface Page<T> {
   first: boolean;
   last: boolean;
 }
+
+export type AlertStatus = "OPEN" | "ACKNOWLEDGED" | "RESOLVED" | "DISMISSED";
+
+export interface AlertDto {
+  id: string;
+  reference: string;
+  detectionId?: string;
+  eventId?: string;
+  applicationId: string;
+  title: string;
+  description?: string;
+  severity: Severity;
+  confidence: number;
+  riskScore: number;
+  status: AlertStatus;
+  acknowledgedBy?: string | null;
+  acknowledgedAt?: string | null;
+  dispositionNotes?: string | null;
+  dispositionBy?: string | null;
+  dispositionAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SecuritySummaryReportDto {
+  reportType: string;
+  generatedAt: string;
+  totalApplications: number;
+  totalFindings: number;
+  criticalFindings: number;
+  highFindings: number;
+  overdueFindings: number;
+  activeCampaigns: number;
+  averageRiskScore: number;
+  severityDistribution: Record<string, number>;
+  statusDistribution: Record<string, number>;
+}
+
+export interface ApiKeyDto {
+  id: string;
+  applicationId: string;
+  name: string;
+  keyPrefix: string;
+  status: "ACTIVE" | "REVOKED" | "EXPIRED";
+  createdAt: string;
+  expiresAt?: string | null;
+  revokedAt?: string | null;
+}
+
+export interface CreateApiKeyRequest {
+  name: string;
+  expiryDays?: number;
+}
+
+export interface ApiKeyCreatedResponse {
+  id: string;
+  applicationId: string;
+  name: string;
+  keyPrefix: string;
+  rawApiKey: string;
+  status: "ACTIVE" | "REVOKED" | "EXPIRED";
+  createdAt: string;
+  expiresAt?: string | null;
+}
+

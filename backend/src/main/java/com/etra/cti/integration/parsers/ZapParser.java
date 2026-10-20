@@ -16,14 +16,26 @@ public class ZapParser {
     private final ObjectMapper mapper = new ObjectMapper();
 
     public List<ImportedFinding> parse(InputStream json) {
-        JsonNode root = mapper.readTree(json);
+        if (json == null) {
+            return List.of();
+        }
+        JsonNode root;
+        try {
+            root = mapper.readTree(json);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Invalid ZAP JSON report: " + e.getMessage(), e);
+        }
+        if (root == null || root.isMissingNode() || root.isNull()) {
+            return List.of();
+        }
+
         List<ImportedFinding> out = new ArrayList<>();
 
-        // ZAP JSON report format: root.site[].alerts[]
+        // ZAP standard JSON format: root.site[].alerts[]
         JsonNode sites = root.path("site");
         if (sites.isArray()) {
             for (JsonNode site : sites) {
-                String siteName = site.path("@name").asText("");
+                String siteName = sanitize(site.path("@name").asText(""));
                 JsonNode alerts = site.path("alerts");
                 if (alerts.isArray()) {
                     for (JsonNode alert : alerts) {
@@ -31,12 +43,9 @@ public class ZapParser {
                     }
                 }
             }
-        }
-
-        // Alternative format: root.alerts (flat list)
-        JsonNode flatAlerts = root.path("alerts");
-        if (flatAlerts.isArray()) {
-            for (JsonNode alert : flatAlerts) {
+        } else if (root.path("alerts").isArray()) {
+            // Alternative flat format: root.alerts[]
+            for (JsonNode alert : root.path("alerts")) {
                 out.add(fromAlert(alert, ""));
             }
         }
@@ -45,28 +54,30 @@ public class ZapParser {
     }
 
     private ImportedFinding fromAlert(JsonNode alert, String site) {
-        String name = alert.path("alert").asText(alert.path("name").asText("ZAP Finding"));
+        String name = sanitize(alert.path("alert").asText(alert.path("name").asText("ZAP Finding")));
         String risk = alert.path("riskdesc").asText(alert.path("riskcode").asText("Medium"));
-        String desc = alert.path("desc").asText("");
-        String solution = alert.path("solution").asText("");
+        String desc = sanitize(alert.path("desc").asText(""));
+        String solution = sanitize(alert.path("solution").asText(""));
 
         String endpoint = site;
         JsonNode instances = alert.path("instances");
         if (instances.isArray() && instances.size() > 0) {
             JsonNode first = instances.get(0);
-            String uri = first.path("uri").asText("");
+            String uri = sanitize(first.path("uri").asText(""));
             if (!uri.isBlank()) endpoint = uri;
         }
 
         String param = "";
         if (instances.isArray() && instances.size() > 0) {
-            param = instances.get(0).path("param").asText("");
+            param = sanitize(instances.get(0).path("param").asText(""));
         }
+
+        String finalDesc = desc.isBlank() ? (solution.isBlank() ? name : solution) : desc;
 
         return new ImportedFinding(
             name,
-            desc.isBlank() ? solution : desc,
-            endpoint,
+            finalDesc,
+            endpoint.isBlank() ? "N/A" : endpoint,
             param.isBlank() ? null : param,
             mapSeverity(risk),
             solution,
@@ -77,9 +88,16 @@ public class ZapParser {
     private Severity mapSeverity(String s) {
         if (s == null) return Severity.MEDIUM;
         String lower = s.toLowerCase();
+        if (lower.contains("critical")) return Severity.CRITICAL;
         if (lower.contains("high")) return Severity.HIGH;
         if (lower.contains("medium")) return Severity.MEDIUM;
-        if (lower.contains("low")) return Severity.LOW;
+        if (lower.contains("low") || lower.contains("informational")) return Severity.LOW;
         return Severity.MEDIUM;
+    }
+
+    private String sanitize(String text) {
+        if (text == null) return "";
+        // Strip null bytes and non-printable control characters (except newline and tab)
+        return text.replaceAll("[\u0000-\u0008\u000B\u000C\u000E-\u001F]", "").trim();
     }
 }

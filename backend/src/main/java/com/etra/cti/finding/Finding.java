@@ -5,6 +5,7 @@ import com.etra.cti.detection.Severity;
 import jakarta.persistence.*;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.UUID;
 
 @Entity
@@ -51,6 +52,12 @@ public class Finding extends BaseEntity {
 
     @Column(name = "assigned_to")
     private UUID assignedTo;
+
+    @Column(name = "due_date")
+    private Instant dueDate;
+
+    @Column(name = "priority_override_reason", columnDefinition = "TEXT")
+    private String priorityOverrideReason;
 
     @Column(name = "risk_score", precision = 6, scale = 3)
     private BigDecimal riskScore;
@@ -99,6 +106,12 @@ public class Finding extends BaseEntity {
 
     public UUID getAssignedTo() { return assignedTo; }
     public void setAssignedTo(UUID assignedTo) { this.assignedTo = assignedTo; }
+
+    public Instant getDueDate() { return dueDate; }
+    public void setDueDate(Instant dueDate) { this.dueDate = dueDate; }
+
+    public String getPriorityOverrideReason() { return priorityOverrideReason; }
+    public void setPriorityOverrideReason(String priorityOverrideReason) { this.priorityOverrideReason = priorityOverrideReason; }
 
     public BigDecimal getRiskScore() { return riskScore; }
     public void setRiskScore(BigDecimal riskScore) { this.riskScore = riskScore; }

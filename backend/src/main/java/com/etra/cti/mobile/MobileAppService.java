@@ -129,7 +129,7 @@ public class MobileAppService {
             int created = 0;
             for (ImportedFinding p : report.findings()) {
                 Finding f = new Finding();
-                f.setReference(String.format("ETRA-%05d", findings.count() + 1));
+                f.setReference(findingService.nextReference());
                 f.setApplicationId(app.getId());
                 f.setTitle(truncate(p.title(), 255));
                 f.setDescription(p.description());
@@ -145,7 +145,7 @@ public class MobileAppService {
                 var risk = riskEngine.calculate(p.severity(), f.getConfidence(), app, 1.0);
                 f.setRiskScore(risk.score());
                 f.setRiskBand(risk.band());
-                findings.save(f);
+                findings.saveAndFlush(f);
                 created++;
             }
 

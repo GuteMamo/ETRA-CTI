@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { Users as UsersIcon, Plus, Loader2 } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
@@ -55,11 +55,22 @@ export function UsersPage() {
     }
   }
 
+  async function toggleStatus(u: UserDto) {
+    const newStatus = u.enabled === false;
+    try {
+      await api.patch(`/users/${u.id}/status`, { enabled: newStatus });
+      toast.success(`User ${newStatus ? "enabled" : "disabled"}`);
+      qc.invalidateQueries({ queryKey: ["users"] });
+    } catch (e) {
+      toast.error(extractError(e));
+    }
+  }
+
   return (
     <>
       <Header
         title="Users & Roles"
-        description="Manage team members and their access levels"
+        description="Manage team members, access roles, and account statuses"
         actions={
           <Button size="sm" onClick={() => setShowForm((v) => !v)}>
             <Plus className="h-4 w-4" /> Add User
@@ -116,28 +127,47 @@ export function UsersPage() {
                   <th className="text-left px-4 py-3">Name</th>
                   <th className="text-left px-4 py-3">Email</th>
                   <th className="text-left px-4 py-3">Role</th>
+                  <th className="text-left px-4 py-3">Status</th>
                   <th className="text-right px-4 py-3">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {usersQ.data.map((u) => (
-                  <tr key={u.id} className="border-t border-slate-800 hover:bg-slate-800/40">
-                    <td className="px-4 py-3 text-white">{u.fullName}</td>
-                    <td className="px-4 py-3 text-slate-400 font-mono text-xs">{u.email}</td>
-                    <td className="px-4 py-3">
-                      <Badge kind="neutral">{u.role}</Badge>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <select
-                        value={u.role}
-                        onChange={(e) => updateRole(u.id, e.target.value as UserRole)}
-                        className="h-8 rounded-md border border-slate-700 bg-slate-900 px-2 text-xs text-slate-100"
-                      >
-                        {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
-                      </select>
-                    </td>
-                  </tr>
-                ))}
+                {usersQ.data.map((u) => {
+                  const isEnabled = u.enabled !== false;
+                  return (
+                    <tr key={u.id} className="border-t border-slate-800 hover:bg-slate-800/40">
+                      <td className="px-4 py-3 text-white font-medium">{u.fullName}</td>
+                      <td className="px-4 py-3 text-slate-400 font-mono text-xs">{u.email}</td>
+                      <td className="px-4 py-3">
+                        <Badge kind="neutral">{u.role}</Badge>
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge kind={isEnabled ? "info" : "danger"}>
+                          {isEnabled ? "ACTIVE" : "DISABLED"}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <select
+                            value={u.role}
+                            onChange={(e) => updateRole(u.id, e.target.value as UserRole)}
+                            className="h-8 rounded-md border border-slate-700 bg-slate-900 px-2 text-xs text-slate-100"
+                          >
+                            {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+                          </select>
+                          <Button
+                            size="sm"
+                            variant={isEnabled ? "ghost" : "primary"}
+                            className={isEnabled ? "text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 text-xs h-8" : "text-xs h-8"}
+                            onClick={() => toggleStatus(u)}
+                          >
+                            {isEnabled ? "Disable" : "Enable"}
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           )}

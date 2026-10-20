@@ -18,13 +18,16 @@ public class DetectionService {
     private final List<DetectionRule> rules;
     private final DetectionRepository detections;
     private final SecurityEventRepository events;
+    private final com.etra.cti.alert.AlertService alertService;
 
     public DetectionService(List<DetectionRule> rules,
                             DetectionRepository detections,
-                            SecurityEventRepository events) {
+                            SecurityEventRepository events,
+                            com.etra.cti.alert.AlertService alertService) {
         this.rules = rules;
         this.detections = detections;
         this.events = events;
+        this.alertService = alertService;
         log.info(">>> DetectionService initialized with {} rules: {}",
             rules.size(),
             rules.stream().map(DetectionRule::id).toList());
@@ -48,6 +51,7 @@ public class DetectionService {
                 Detection d = opt.get();
                 log.info(">>> Rule {} matched → saving detection type={}", rule.id(), d.getType());
                 detections.save(d);
+                alertService.createFromDetection(d, event);
                 saved++;
             } else {
                 log.debug(">>> Rule {} did not match", rule.id());

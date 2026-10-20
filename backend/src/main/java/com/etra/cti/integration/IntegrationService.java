@@ -17,6 +17,9 @@ import com.etra.cti.integration.dto.ImportDto;
 import com.etra.cti.integration.parsers.BurpParser;
 import com.etra.cti.integration.parsers.NmapParser;
 import com.etra.cti.integration.parsers.ZapParser;
+import com.etra.cti.organization.OrganizationService;
+import com.etra.cti.project.Project;
+import com.etra.cti.project.ProjectRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -38,6 +41,8 @@ public class IntegrationService {
 
     private final IntegrationImportRepository imports;
     private final ApplicationRepository apps;
+    private final ProjectRepository projects;
+    private final OrganizationService orgService;
     private final FindingRepository findings;
     private final AssetRepository assets;
     private final RiskEngine riskEngine;
@@ -49,6 +54,8 @@ public class IntegrationService {
 
     public IntegrationService(IntegrationImportRepository imports,
                               ApplicationRepository apps,
+                              ProjectRepository projects,
+                              OrganizationService orgService,
                               FindingRepository findings,
                               AssetRepository assets,
                               RiskEngine riskEngine,
@@ -59,6 +66,8 @@ public class IntegrationService {
                               NmapParser nmapParser) {
         this.imports = imports;
         this.apps = apps;
+        this.projects = projects;
+        this.orgService = orgService;
         this.findings = findings;
         this.assets = assets;
         this.riskEngine = riskEngine;
@@ -88,6 +97,9 @@ public class IntegrationService {
                                 MultipartFile file, UUID userId) {
         Application app = apps.findById(applicationId)
             .orElseThrow(() -> new NotFoundException("Application not found"));
+        Project project = projects.findById(app.getProjectId())
+            .orElseThrow(() -> new NotFoundException("Project not found"));
+        orgService.requireMember(project.getOrganizationId(), userId);
 
         IntegrationImport imp = new IntegrationImport();
         imp.setSource(source);
@@ -139,12 +151,12 @@ public class IntegrationService {
                 continue;
             }
             Finding f = new Finding();
-            f.setReference(nextReference());
+            f.setReference(findingService.nextReference());
             f.setApplicationId(app.getId());
             f.setTitle(truncate(p.title(), 255));
             f.setDescription(p.description());
-            f.setEndpoint(p.endpoint());
-            f.setParameter(p.parameter());
+            f.setEndpoint(truncate(p.endpoint(), 1000));
+            f.setParameter(truncate(p.parameter(), 255));
             f.setSeverity(p.severity());
             f.setConfidence(new BigDecimal("0.900"));
             f.setSource(imp.getSource().name());
@@ -155,7 +167,13 @@ public class IntegrationService {
             var risk = riskEngine.calculate(p.severity(), f.getConfidence(), app, 1.0);
             f.setRiskScore(risk.score());
             f.setRiskBand(risk.band());
-            findings.save(f);
+            findings.saveAndFlush(f);
+
+            // Auto-generate remediation for high/critical scanner findings
+            if (p.severity() == Severity.HIGH || p.severity() == Severity.CRITICAL) {
+                findingService.autoCreateRemediation(f);
+            }
+
             created++;
         }
         imp.setFindingsCreated(created);
@@ -207,11 +225,6 @@ public class IntegrationService {
             case "MOBSF" -> "MobSF (Mobile Security Framework)";
             default      -> source;
         };
-    }
-
-    private String nextReference() {
-        long n = findings.count() + 1;
-        return String.format("ETRA-%05d", n);
     }
 
     public List<ImportDto> listAll() {

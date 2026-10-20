@@ -1,4 +1,4 @@
-﻿import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { api, tokenStore, extractError } from "@/lib/api";
 import type { UserDto, TokenPair, UserRole } from "@/lib/types";
 
@@ -10,7 +10,15 @@ interface AuthCtx {
   hasRole: (roles: UserRole[]) => boolean;
 }
 
-const Ctx = createContext<AuthCtx | undefined>(undefined);
+const defaultAuthCtx: AuthCtx = {
+  user: null,
+  loading: true,
+  login: async () => {},
+  logout: () => {},
+  hasRole: () => false,
+};
+
+const Ctx = createContext<AuthCtx>(defaultAuthCtx);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserDto | null>(null);
@@ -62,6 +70,5 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export function useAuth() {
   const c = useContext(Ctx);
-  if (!c) throw new Error("useAuth must be used inside AuthProvider");
-  return c;
+  return c ?? defaultAuthCtx;
 }

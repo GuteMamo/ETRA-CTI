@@ -1,4 +1,4 @@
-﻿import { useParams, Link } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import {
   ArrowLeft, Shield, Clock, Globe, Crosshair,
   ChevronRight, AlertTriangle
@@ -56,7 +56,7 @@ export function CampaignDetailPage() {
     return `${h}h ${m % 60}m`;
   })();
 
-  const stagesPresent = Array.from(new Set(timeline.map(t => t.stage)));
+  const stagesPresent: AttackStage[] = Array.from(new Set(timeline.map(t => t.stage)));
 
   return (
     <>
@@ -112,7 +112,7 @@ export function CampaignDetailPage() {
               {stagesPresent.map((stage, idx) => {
                 const meta = STAGE_META[stage as AttackStage];
                 return (
-                  <div key={stage} className="flex items-center gap-2">
+                  <div key={String(stage)} className="flex items-center gap-2">
                     <div className={`flex items-center gap-2 rounded-md border px-3 py-2 ${meta.bg} ${meta.border}`}>
                       <span>{meta.icon}</span>
                       <span className={`text-xs font-medium ${meta.color}`}>{meta.label}</span>

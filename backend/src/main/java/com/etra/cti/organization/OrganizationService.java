@@ -16,12 +16,17 @@ import java.util.List;
 import java.util.UUID;
 
 @Service
-@RequiredArgsConstructor
 public class OrganizationService {
 
     private final OrganizationRepository orgs;
     private final OrganizationMemberRepository members;
     private final UserRepository users;
+
+    public OrganizationService(OrganizationRepository orgs, OrganizationMemberRepository members, UserRepository users) {
+        this.orgs = orgs;
+        this.members = members;
+        this.users = users;
+    }
 
     @Transactional
     public OrganizationDto create(CreateOrganizationRequest req, UUID creatorId) {
@@ -75,7 +80,17 @@ public class OrganizationService {
 
     public OrganizationMember requireMember(UUID orgId, UUID userId) {
         return members.findByOrganizationIdAndUserId(orgId, userId)
-            .orElseThrow(() -> new AccessDeniedException("Not a member of this organization"));
+            .orElseGet(() -> {
+                User u = users.findById(userId).orElseThrow(() -> new AccessDeniedException("User not found"));
+                if (u.getRole() == UserRole.ADMIN) {
+                    OrganizationMember syntheticAdmin = new OrganizationMember();
+                    syntheticAdmin.setOrganizationId(orgId);
+                    syntheticAdmin.setUserId(userId);
+                    syntheticAdmin.setRole(UserRole.ADMIN);
+                    return syntheticAdmin;
+                }
+                throw new AccessDeniedException("Not a member of this organization");
+            });
     }
 
     public OrganizationMember requireAdmin(UUID orgId, UUID userId) {

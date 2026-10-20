@@ -12,11 +12,15 @@ import java.util.List;
 import java.util.UUID;
 
 @Service
-@RequiredArgsConstructor
 public class ProjectService {
 
     private final ProjectRepository projects;
     private final OrganizationService orgService;
+
+    public ProjectService(ProjectRepository projects, OrganizationService orgService) {
+        this.projects = projects;
+        this.orgService = orgService;
+    }
 
     @Transactional
     public ProjectDto create(UUID orgId, CreateProjectRequest req, UUID userId) {
@@ -33,6 +37,10 @@ public class ProjectService {
     public List<ProjectDto> list(UUID orgId, UUID userId) {
         orgService.requireMember(orgId, userId);
         return projects.findByOrganizationId(orgId).stream().map(ProjectDto::from).toList();
+    }
+
+    public List<ProjectDto> listAll(UUID userId) {
+        return projects.findAll().stream().map(ProjectDto::from).toList();
     }
 
     public ProjectDto get(UUID projectId, UUID userId) {

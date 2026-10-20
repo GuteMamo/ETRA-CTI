@@ -1,7 +1,7 @@
-﻿import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import {
-  LayoutDashboard, AlertTriangle, Swords, Search, FileCheck,
-  Upload, Smartphone, Shield, Target, LogOut, Users as UsersIcon
+  LayoutDashboard, AlertTriangle, Bell, Swords, Search, FileCheck,
+  Upload, Smartphone, Shield, Target, LogOut, Users as UsersIcon, KeyRound
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -17,6 +17,10 @@ interface LinkDef {
 
 const links: LinkDef[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true, roles: ["*"] },
+  { to: "/applications", label: "Applications & Keys", icon: KeyRound,
+    roles: ["ADMIN", "SECURITY_MANAGER", "ANALYST", "DEVELOPER", "PENTESTER"] },
+  { to: "/alerts", label: "Alerts", icon: Bell,
+    roles: ["ADMIN", "SECURITY_MANAGER", "ANALYST", "PENTESTER"] },
   { to: "/findings", label: "Findings", icon: AlertTriangle, roles: ["*"] },
   { to: "/campaigns", label: "Attack Campaigns", icon: Swords,
     roles: ["ADMIN", "SECURITY_MANAGER", "ANALYST", "PENTESTER"] },
@@ -33,7 +37,7 @@ const links: LinkDef[] = [
     roles: ["ADMIN", "SECURITY_MANAGER", "ANALYST"] },
   { to: "/users", label: "Users & Roles", icon: UsersIcon, roles: ["ADMIN"] },
   { to: "/audit", label: "Audit Log", icon: Shield,
-    roles: ["ADMIN", "SECURITY_MANAGER"] },
+    roles: ["ADMIN", "SECURITY_MANAGER", "ANALYST", "VIEWER"] },
 ];
 
 export function Sidebar() {

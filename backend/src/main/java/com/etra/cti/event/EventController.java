@@ -30,10 +30,29 @@ public class EventController {
 
     @PostMapping("/events")
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasAnyRole('ADMIN','SECURITY_MANAGER','PENTESTER','ANALYST')")
+    @PreAuthorize("hasAnyRole('ADMIN','SECURITY_MANAGER','PENTESTER','ANALYST','APPLICATION')")
     public EventDto ingest(@Valid @RequestBody IngestEventRequest req,
                            @AuthenticationPrincipal JwtAuthFilter.AuthedUser me) {
-        return service.ingest(req);
+        return service.ingest(req, me);
+    }
+
+    @GetMapping("/events")
+    @PreAuthorize("hasAnyRole('ADMIN','SECURITY_MANAGER','PENTESTER','ANALYST','DEVELOPER','VIEWER')")
+    public Page<EventDto> list(
+        @RequestParam(required = false) UUID applicationId,
+        @RequestParam(defaultValue = "0") int page,
+        @RequestParam(defaultValue = "50") int size
+    ) {
+        if (applicationId != null) {
+            return service.listByApplication(applicationId, PageRequest.of(page, size));
+        }
+        return service.listAll(PageRequest.of(page, size));
+    }
+
+    @GetMapping("/events/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','SECURITY_MANAGER','PENTESTER','ANALYST','DEVELOPER','VIEWER')")
+    public EventDto get(@PathVariable UUID id) {
+        return service.get(id);
     }
 
     @GetMapping("/applications/{appId}/events")

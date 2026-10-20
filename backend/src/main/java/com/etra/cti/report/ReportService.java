@@ -26,6 +26,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -123,6 +124,39 @@ public class ReportService {
             app == null ? null : ApplicationDto.from(app),
             timeline,
             linkedFindings
+        );
+    }
+
+    public com.etra.cti.report.dto.SecuritySummaryReportDto securitySummaryReport() {
+        List<Finding> allFindings = findings.findAll();
+        long totalApps = apps.count();
+        long totalFindings = allFindings.size();
+        long critical = allFindings.stream().filter(f -> f.getSeverity() == com.etra.cti.detection.Severity.CRITICAL).count();
+        long high = allFindings.stream().filter(f -> f.getSeverity() == com.etra.cti.detection.Severity.HIGH).count();
+        long overdue = allFindings.stream().filter(f -> f.getDueDate() != null && f.getDueDate().isBefore(Instant.now())
+            && f.getStatus() != com.etra.cti.finding.FindingStatus.VERIFIED
+            && f.getStatus() != com.etra.cti.finding.FindingStatus.CLOSED).count();
+        long activeCampaigns = campaigns.findAll().stream().filter(c -> "OPEN".equalsIgnoreCase(c.getStatus())).count();
+        double avgRisk = allFindings.isEmpty() ? 0.0 : allFindings.stream()
+            .mapToDouble(f -> f.getRiskScore() != null ? f.getRiskScore().doubleValue() : 0.0).average().orElse(0.0);
+
+        Map<String, Long> sevDist = allFindings.stream()
+            .collect(java.util.stream.Collectors.groupingBy(f -> f.getSeverity().name(), java.util.stream.Collectors.counting()));
+        Map<String, Long> statusDist = allFindings.stream()
+            .collect(java.util.stream.Collectors.groupingBy(f -> f.getStatus().name(), java.util.stream.Collectors.counting()));
+
+        return new com.etra.cti.report.dto.SecuritySummaryReportDto(
+            "EXECUTIVE_SECURITY_SUMMARY",
+            Instant.now(),
+            totalApps,
+            totalFindings,
+            critical,
+            high,
+            overdue,
+            activeCampaigns,
+            Math.round(avgRisk * 10.0) / 10.0,
+            sevDist,
+            statusDist
         );
     }
 

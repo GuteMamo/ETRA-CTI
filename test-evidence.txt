@@ -1,0 +1,7 @@
+ETRA-CTI Security Evidence Artifact
+Finding Reference: ETRA-FIND-0001
+Vulnerability: SQL Injection in Authentication Endpoint
+Hash verification sample payload: ' OR '1'='1' --
+Captured at: 2026-10-15
+Author: Security Operations Team
+Integrity Checksum: SHA-256 Deterministic Validation

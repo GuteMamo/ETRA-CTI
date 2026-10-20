@@ -1,4 +1,5 @@
-﻿import { Wrench, CheckCircle2, XCircle, Clock, RotateCcw } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Wrench, CheckCircle2, XCircle, Clock, RotateCcw } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -74,7 +75,9 @@ export function RemediationsPage() {
                   return (
                     <tr key={r.id} className="border-t border-slate-800 hover:bg-slate-800/40">
                       <td className="px-4 py-3 font-mono text-xs text-blue-300">
-                        {r.findingId.slice(0, 8)}…
+                        <Link to={`/findings/${r.findingId}`} className="hover:underline flex items-center gap-1">
+                          {r.findingId.slice(0, 8)}…
+                        </Link>
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">

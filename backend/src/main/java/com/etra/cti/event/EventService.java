@@ -2,6 +2,7 @@ package com.etra.cti.event;
 
 import com.etra.cti.application.Application;
 import com.etra.cti.application.ApplicationRepository;
+import com.etra.cti.auth.JwtAuthFilter;
 import com.etra.cti.campaign.CorrelationEngine;
 import com.etra.cti.common.exception.NotFoundException;
 import com.etra.cti.detection.Detection;
@@ -10,6 +11,9 @@ import com.etra.cti.detection.DetectionService;
 import com.etra.cti.detection.Severity;
 import com.etra.cti.event.dto.EventDto;
 import com.etra.cti.event.dto.IngestEventRequest;
+import com.etra.cti.organization.OrganizationService;
+import com.etra.cti.project.Project;
+import com.etra.cti.project.ProjectRepository;
 import com.etra.cti.threatintel.Ioc;
 import com.etra.cti.threatintel.IocType;
 import com.etra.cti.threatintel.ThreatIntelService;
@@ -17,6 +21,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,29 +37,57 @@ public class EventService {
 
     private final SecurityEventRepository events;
     private final ApplicationRepository apps;
+    private final ProjectRepository projects;
+    private final OrganizationService orgService;
     private final DetectionService detectionService;
     private final CorrelationEngine correlationEngine;
     private final ThreatIntelService threatIntel;
     private final DetectionRepository detections;
+    private final com.etra.cti.alert.AlertService alertService;
 
     public EventService(SecurityEventRepository events,
                         ApplicationRepository apps,
+                        ProjectRepository projects,
+                        OrganizationService orgService,
                         DetectionService detectionService,
                         CorrelationEngine correlationEngine,
                         ThreatIntelService threatIntel,
-                        DetectionRepository detections) {
+                        DetectionRepository detections,
+                        com.etra.cti.alert.AlertService alertService) {
         this.events = events;
         this.apps = apps;
+        this.projects = projects;
+        this.orgService = orgService;
         this.detectionService = detectionService;
         this.correlationEngine = correlationEngine;
         this.threatIntel = threatIntel;
         this.detections = detections;
+        this.alertService = alertService;
     }
 
     @Transactional
     public EventDto ingest(IngestEventRequest req) {
+        return ingest(req, null);
+    }
+
+    @Transactional
+    public EventDto ingest(IngestEventRequest req, JwtAuthFilter.AuthedUser caller) {
         Application app = apps.findById(req.applicationId())
             .orElseThrow(() -> new NotFoundException("Application not found"));
+
+        if (caller != null) {
+            if ("APPLICATION".equalsIgnoreCase(caller.role())) {
+                if (!req.applicationId().equals(caller.id())) {
+                    log.warn(">>> BOLA/IDOR attempt: API key for app {} attempted to submit event for app {}",
+                        caller.id(), req.applicationId());
+                    throw new AccessDeniedException("API key is not authorized for application " + req.applicationId());
+                }
+            } else {
+                Project p = projects.findById(app.getProjectId())
+                    .orElseThrow(() -> new NotFoundException("Project not found"));
+                orgService.requireMember(p.getOrganizationId(), caller.id());
+            }
+        }
 
         SecurityEvent e = new SecurityEvent();
         e.setApplicationId(app.getId());
@@ -99,6 +132,7 @@ public class EventService {
             "description", String.valueOf(ioc.getDescription())
         ));
         detections.save(d);
+        alertService.createFromDetection(d, e);
 
         log.warn(">>> IOC MATCH on event {}: source {} is a known malicious indicator ({})",
             e.getId(), e.getSourceIp(), ioc.getSource());
@@ -106,5 +140,15 @@ public class EventService {
 
     public Page<EventDto> listByApplication(UUID applicationId, Pageable pageable) {
         return events.findByApplicationIdOrderByEventTimeDesc(applicationId, pageable).map(EventDto::from);
+    }
+
+    public Page<EventDto> listAll(Pageable pageable) {
+        return events.findAllByOrderByEventTimeDesc(pageable).map(EventDto::from);
+    }
+
+    public EventDto get(UUID id) {
+        SecurityEvent e = events.findById(id)
+            .orElseThrow(() -> new NotFoundException("Security event not found"));
+        return EventDto.from(e);
     }
 }

@@ -35,7 +35,7 @@ server:
 
 etra:
   jwt:
-    secret: ${JWT_SECRET}
+    secret: ${JWT_SECRET:eJG6Y/b1IZ6d0wWVOnjWGwXAEAiYqXDA0eetVAz06P7AMZfg1eQCxiMwAxFe844JZ5JjUFqZ8aX2hPimqdRwLg==}
     access-token-expiry: 900000
     refresh-token-expiry: 604800000
   cors:

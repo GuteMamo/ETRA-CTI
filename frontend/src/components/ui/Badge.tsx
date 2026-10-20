@@ -1,7 +1,7 @@
-﻿import { cn } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import type { Severity, RiskBand, FindingStatus, RemediationStatus } from "@/lib/types";
 
-type Kind = "severity" | "risk" | "status" | "remediation" | "neutral";
+type Kind = "severity" | "risk" | "status" | "remediation" | "neutral" | "danger" | "info" | "success";
 interface Props { children: React.ReactNode; kind?: Kind; value?: string; className?: string; }
 
 function severityClass(v: string): string {
@@ -41,6 +41,9 @@ export function Badge({ children, kind = "neutral", value, className }: Props) {
   if (kind === "severity" || kind === "risk") tone = severityClass(String(value ?? children));
   if (kind === "status") tone = statusClass(String(value ?? children));
   if (kind === "remediation") tone = remediationClass(String(value ?? children));
+  if (kind === "danger") tone = "bg-red-500/15 text-red-300 border-red-500/30";
+  if (kind === "info") tone = "bg-blue-500/15 text-blue-300 border-blue-500/30";
+  if (kind === "success") tone = "bg-emerald-500/15 text-emerald-300 border-emerald-500/30";
 
   return (
     <span className={cn(

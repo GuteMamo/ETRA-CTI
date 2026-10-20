@@ -16,13 +16,19 @@ import java.util.List;
 import java.util.UUID;
 
 @Service
-@RequiredArgsConstructor
 public class AssetService {
 
     private final AssetRepository assets;
     private final ApplicationRepository apps;
     private final ProjectRepository projects;
     private final OrganizationService orgService;
+
+    public AssetService(AssetRepository assets, ApplicationRepository apps, ProjectRepository projects, OrganizationService orgService) {
+        this.assets = assets;
+        this.apps = apps;
+        this.projects = projects;
+        this.orgService = orgService;
+    }
 
     @Transactional
     public AssetDto create(UUID appId, CreateAssetRequest req, UUID userId) {
@@ -51,5 +57,15 @@ public class AssetService {
         Project p = projects.findById(app.getProjectId()).orElseThrow();
         orgService.requireMember(p.getOrganizationId(), userId);
         return assets.findByApplicationId(appId).stream().map(AssetDto::from).toList();
+    }
+
+    public List<AssetDto> listAll(UUID userId) {
+        return assets.findAll().stream().map(AssetDto::from).toList();
+    }
+
+    public AssetDto get(UUID assetId, UUID userId) {
+        Asset a = assets.findById(assetId)
+            .orElseThrow(() -> new NotFoundException("Asset not found"));
+        return AssetDto.from(a);
     }
 }

@@ -14,12 +14,17 @@ import java.util.List;
 import java.util.UUID;
 
 @Service
-@RequiredArgsConstructor
 public class ApplicationService {
 
     private final ApplicationRepository apps;
     private final ProjectRepository projects;
     private final OrganizationService orgService;
+
+    public ApplicationService(ApplicationRepository apps, ProjectRepository projects, OrganizationService orgService) {
+        this.apps = apps;
+        this.projects = projects;
+        this.orgService = orgService;
+    }
 
     @Transactional
     public ApplicationDto create(UUID projectId, CreateApplicationRequest req, UUID userId) {
@@ -44,6 +49,10 @@ public class ApplicationService {
             .orElseThrow(() -> new NotFoundException("Project not found"));
         orgService.requireMember(p.getOrganizationId(), userId);
         return apps.findByProjectId(projectId).stream().map(ApplicationDto::from).toList();
+    }
+
+    public List<ApplicationDto> listAll(UUID userId) {
+        return apps.findAll().stream().map(ApplicationDto::from).toList();
     }
 
     public ApplicationDto get(UUID appId, UUID userId) {

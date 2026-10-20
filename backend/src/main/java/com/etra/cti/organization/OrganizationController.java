@@ -25,7 +25,7 @@ public class OrganizationController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasAnyRole('ADMIN','SECURITY_MANAGER')")
+    @PreAuthorize("!hasRole('VIEWER')")
     public OrganizationDto create(@Valid @RequestBody CreateOrganizationRequest req,
                                   @AuthenticationPrincipal JwtAuthFilter.AuthedUser me) {
         return service.create(req, me.id());
@@ -46,7 +46,7 @@ public class OrganizationController {
 
     @PostMapping("/{id}/members")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    @PreAuthorize("hasAnyRole('ADMIN','SECURITY_MANAGER')")
+    @PreAuthorize("!hasRole('VIEWER')")
     public void addMember(@PathVariable UUID id,
                           @Valid @RequestBody AddMemberRequest req,
                           @AuthenticationPrincipal JwtAuthFilter.AuthedUser me) {

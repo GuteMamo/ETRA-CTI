@@ -1,4 +1,4 @@
-﻿import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
@@ -18,6 +18,8 @@ import { MobilePage } from "@/pages/MobilePage";
 import { IocsPage } from "@/pages/IocsPage";
 import { AuditPage } from "@/pages/AuditPage";
 import { UsersPage } from "@/pages/UsersPage";
+import { AlertsPage } from "@/pages/AlertsPage";
+import { ApplicationsPage } from "@/pages/ApplicationsPage";
 
 const qc = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false, staleTime: 30_000 } },
@@ -98,8 +100,20 @@ export default function App() {
                 </RoleProtectedRoute>
               } />
 
+              <Route path="alerts" element={
+                <RoleProtectedRoute roles={["ADMIN","SECURITY_MANAGER","ANALYST","PENTESTER"]}>
+                  <AlertsPage />
+                </RoleProtectedRoute>
+              } />
+
+              <Route path="applications" element={
+                <RoleProtectedRoute roles={["ADMIN","SECURITY_MANAGER","ANALYST","DEVELOPER","PENTESTER"]}>
+                  <ApplicationsPage />
+                </RoleProtectedRoute>
+              } />
+
               <Route path="audit" element={
-                <RoleProtectedRoute roles={["ADMIN","SECURITY_MANAGER"]}>
+                <RoleProtectedRoute roles={["ADMIN","SECURITY_MANAGER","ANALYST","VIEWER"]}>
                   <AuditPage />
                 </RoleProtectedRoute>
               } />

@@ -5,8 +5,8 @@ import com.etra.cti.user.UserRole;
 
 import java.util.UUID;
 
-public record UserDto(UUID id, String email, String fullName, UserRole role) {
+public record UserDto(UUID id, String email, String fullName, UserRole role, boolean enabled) {
     public static UserDto from(User u) {
-        return new UserDto(u.getId(), u.getEmail(), u.getFullName(), u.getRole());
+        return new UserDto(u.getId(), u.getEmail(), u.getFullName(), u.getRole(), u.isEnabled());
     }
 }

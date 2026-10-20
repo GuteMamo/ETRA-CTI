@@ -1,4 +1,4 @@
-﻿import { useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { Shield, Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -8,10 +8,16 @@ import { Input } from "@/components/ui/Input";
 export function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
-  const [email, setEmail] = useState("admin@etra.local");
-  const [password, setPassword] = useState("Password123!");
+  const [email, setEmail] = useState("analyst@etra.et");
+  const [password, setPassword] = useState("Analyst1234!");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  function setPreset(userEmail: string, userPass: string) {
+    setEmail(userEmail);
+    setPassword(userPass);
+    setError(null);
+  }
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -60,9 +66,39 @@ export function LoginPage() {
           <Button type="submit" className="w-full mt-6" size="lg" disabled={loading}>
             {loading ? <><Loader2 className="h-4 w-4 animate-spin" /> Signing in…</> : "Sign in"}
           </Button>
-          <p className="text-[10px] text-slate-500 text-center mt-6">
-            Demo: admin@etra.local / Password123!
-          </p>
+          <div className="mt-6 pt-4 border-t border-slate-800 text-center">
+            <p className="text-[11px] text-slate-400 mb-2 font-medium">Quick Demo Accounts:</p>
+            <div className="flex flex-wrap justify-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setPreset("analyst@etra.et", "Analyst1234!")}
+                className="text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded transition-colors"
+              >
+                Analyst
+              </button>
+              <button
+                type="button"
+                onClick={() => setPreset("admin@etra.et", "Admin1234!")}
+                className="text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded transition-colors"
+              >
+                Admin
+              </button>
+              <button
+                type="button"
+                onClick={() => setPreset("pentester@etra.et", "Pentest1234!")}
+                className="text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded transition-colors"
+              >
+                Pentester
+              </button>
+              <button
+                type="button"
+                onClick={() => setPreset("developer@etra.et", "Dev123456!")}
+                className="text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded transition-colors"
+              >
+                Developer
+              </button>
+            </div>
+          </div>
         </form>
         <p className="text-center text-xs text-slate-600 mt-6">
           © 2026 ETRA-CTI — Application Exposure, Guardian, Intelligence & Security

@@ -25,22 +25,22 @@ public class RemediationController {
 
     @PostMapping("/findings/{findingId}/remediation/start")
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasAnyRole('ADMIN','SECURITY_MANAGER','DEVELOPER')")
+    @PreAuthorize("hasAnyRole('ADMIN','SECURITY_MANAGER','ANALYST','DEVELOPER')")
     public RemediationDto start(@PathVariable UUID findingId,
                                 @Valid @RequestBody StartRemediationRequest req) {
         return service.start(findingId, req.developerId());
     }
 
     @PostMapping("/findings/{findingId}/remediation/ready")
-    @PreAuthorize("hasAnyRole('ADMIN','SECURITY_MANAGER','DEVELOPER')")
+    @PreAuthorize("hasAnyRole('ADMIN','SECURITY_MANAGER','ANALYST','DEVELOPER')")
     public RemediationDto markFixed(@PathVariable UUID findingId,
                                     @RequestBody MarkFixedRequest req) {
         return service.markFixed(findingId, req);
     }
 
-    @PostMapping("/findings/{findingId}/retest")
+    @PostMapping({"/findings/{findingId}/retest", "/findings/{findingId}/retests"})
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasAnyRole('ADMIN','SECURITY_MANAGER','PENTESTER')")
+    @PreAuthorize("hasAnyRole('ADMIN','SECURITY_MANAGER','ANALYST','PENTESTER')")
     public RetestDto retest(@PathVariable UUID findingId,
                             @Valid @RequestBody PerformRetestRequest req,
                             @AuthenticationPrincipal JwtAuthFilter.AuthedUser me) {
@@ -50,7 +50,7 @@ public class RemediationController {
     // ===== READ ACTIONS (workflow roles only) =====
     // VIEWER is intentionally excluded ? they see finding status but not internal workflow.
 
-    @GetMapping("/findings/{findingId}/remediation")
+    @GetMapping({"/findings/{findingId}/remediation", "/findings/{findingId}/remediations"})
     @PreAuthorize("hasAnyRole('ADMIN','SECURITY_MANAGER','PENTESTER','ANALYST','DEVELOPER')")
     public RemediationDto get(@PathVariable UUID findingId) {
         return service.get(findingId);

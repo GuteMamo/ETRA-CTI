@@ -7,66 +7,98 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 
+/**
+ * Section 8.3 Risk Score Implementation:
+ * riskScore = round(0.40 × severityScore + 0.25 × confidenceScore + 0.20 × assetCriticalityScore + 0.15 × exposureScore)
+ *
+ * Each component is normalized to 0–100.
+ * Score Labels:
+ *  0–24  : LOW
+ *  25–49 : MEDIUM
+ *  50–74 : HIGH
+ *  75–100: CRITICAL
+ */
 @Service
 public class RiskEngine {
 
+    public record RiskBreakdown(
+        double severityScore,
+        double confidenceScore,
+        double assetCriticalityScore,
+        double exposureScore,
+        BigDecimal finalScore,
+        String band
+    ) {}
+
     public record RiskResult(BigDecimal score, String band) {}
 
-    /**
-     * Risk = severityWeight * confidence * criticalityWeight * exposureWeight * attackContext
-     * Then scaled to 0-100.
-     */
     public RiskResult calculate(Severity severity,
                                 BigDecimal confidence,
                                 Application app,
                                 double attackContext) {
-        double sev   = severityWeight(severity);
-        double conf  = confidence != null ? confidence.doubleValue() : 0.8;
-        double crit  = criticalityWeight(app.getCriticality().name());
-        double expo  = exposureWeight(app.getEnvironment().name());
-        double ctx   = Math.min(Math.max(attackContext, 1.0), 2.0);
-
-        double raw = sev * conf * crit * expo * ctx;
-        double normalized = Math.min(100.0, raw * 4.0);
-
-        return new RiskResult(
-            BigDecimal.valueOf(normalized).setScale(3, RoundingMode.HALF_UP),
-            band(normalized)
-        );
+        RiskBreakdown breakdown = calculateBreakdown(severity, confidence, app, attackContext);
+        return new RiskResult(breakdown.finalScore(), breakdown.band());
     }
 
-    private double severityWeight(Severity s) {
+    public RiskBreakdown calculateBreakdown(Severity severity,
+                                           BigDecimal confidence,
+                                           Application app,
+                                           double attackContext) {
+        double sevScore = severityScore(severity);
+        double confScore = confidence != null
+            ? Math.min(100.0, Math.max(0.0, confidence.doubleValue() <= 1.0 ? confidence.doubleValue() * 100.0 : confidence.doubleValue()))
+            : 80.0;
+        double critScore = app != null ? criticalityScore(app.getCriticality().name()) : 50.0;
+        double expoScore = app != null ? exposureScore(app.getEnvironment().name()) : 50.0;
+
+        // Documented formula: 0.40*sev + 0.25*conf + 0.20*crit + 0.15*expo
+        double base = (0.40 * sevScore) + (0.25 * confScore) + (0.20 * critScore) + (0.15 * expoScore);
+
+        // Active attack context boost if multi-stage attacks exist
+        double ctx = Math.min(Math.max(attackContext, 1.0), 1.5);
+        double scaled = Math.min(100.0, base * ctx);
+
+        BigDecimal finalScore = BigDecimal.valueOf(Math.round(scaled * 10.0) / 10.0).setScale(1, RoundingMode.HALF_UP);
+        String band = band(finalScore.doubleValue());
+
+        return new RiskBreakdown(sevScore, confScore, critScore, expoScore, finalScore, band);
+    }
+
+    private double severityScore(Severity s) {
+        if (s == null) return 50.0;
         return switch (s) {
-            case LOW      -> 1.0;
-            case MEDIUM   -> 2.5;
-            case HIGH     -> 4.0;
-            case CRITICAL -> 5.0;
+            case LOW      -> 25.0;
+            case MEDIUM   -> 50.0;
+            case HIGH     -> 75.0;
+            case CRITICAL -> 100.0;
         };
     }
 
-    private double criticalityWeight(String c) {
-        return switch (c) {
-            case "LOW"      -> 0.8;
-            case "MEDIUM"   -> 1.0;
-            case "HIGH"     -> 1.3;
-            case "CRITICAL" -> 1.6;
-            default         -> 1.0;
+    private double criticalityScore(String c) {
+        if (c == null) return 50.0;
+        return switch (c.toUpperCase()) {
+            case "LOW"      -> 25.0;
+            case "MEDIUM"   -> 50.0;
+            case "HIGH"     -> 75.0;
+            case "CRITICAL" -> 100.0;
+            default         -> 50.0;
         };
     }
 
-    private double exposureWeight(String env) {
-        return switch (env) {
-            case "DEV"        -> 0.5;
-            case "STAGING"    -> 0.8;
-            case "PRODUCTION" -> 1.5;
-            default           -> 1.0;
+    private double exposureScore(String env) {
+        if (env == null) return 50.0;
+        return switch (env.toUpperCase()) {
+            case "DEV"        -> 25.0;
+            case "STAGING"    -> 60.0;
+            case "PRODUCTION" -> 100.0;
+            default           -> 50.0;
         };
     }
 
     private String band(double v) {
-        if (v <= 20) return "LOW";
-        if (v <= 40) return "MEDIUM";
-        if (v <= 70) return "HIGH";
+        if (v < 25.0) return "LOW";
+        if (v < 50.0) return "MEDIUM";
+        if (v < 75.0) return "HIGH";
         return "CRITICAL";
     }
 }

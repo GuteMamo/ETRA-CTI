@@ -1,4 +1,4 @@
-﻿import axios, { AxiosError, type AxiosInstance } from "axios";
+import axios, { AxiosError, type AxiosInstance } from "axios";
 
 const ACCESS_KEY = "etra.accessToken";
 const REFRESH_KEY = "etra.refreshToken";
@@ -25,6 +25,9 @@ export const api: AxiosInstance = axios.create({
 api.interceptors.request.use((config) => {
   const token = tokenStore.getAccess();
   if (token) config.headers.Authorization = `Bearer ${token}`;
+  if (config.data instanceof FormData) {
+    delete config.headers["Content-Type"];
+  }
   return config;
 });
 

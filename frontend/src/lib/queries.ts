@@ -1,8 +1,9 @@
-﻿import { useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { api } from "./api";
 import type {
-  CampaignDto, FindingDto, ImportDto, Page,
-  InvestigationDto, IocDto, RemediationDto, AuditLogDto, MobileAppDto
+  AlertDto, CampaignDto, CampaignEventDto, FindingDto, ImportDto, Page,
+  InvestigationDto, InvestigationSummaryDto, IocDto, RemediationDto, AuditLogDto, MobileAppDto,
+  ApiKeyDto
 } from "./types";
 
 export function useFindings(page = 0, size = 20) {
@@ -39,7 +40,7 @@ export function useCampaignTimeline(id: string | undefined) {
   return useQuery({
     queryKey: ["campaign-timeline", id],
     enabled: !!id,
-    queryFn: async () => (await api.get(`/campaigns/${id}/timeline`)).data,
+    queryFn: async () => (await api.get<CampaignEventDto[]>(`/campaigns/${id}/timeline`)).data,
   });
 }
 
@@ -54,7 +55,7 @@ export function useInvestigationSummary(id: string | undefined) {
   return useQuery({
     queryKey: ["investigation-summary", id],
     enabled: !!id,
-    queryFn: async () => (await api.get(`/investigations/${id}/summary`)).data,
+    queryFn: async () => (await api.get<InvestigationSummaryDto>(`/investigations/${id}/summary`)).data,
   });
 }
 
@@ -93,3 +94,26 @@ export function useMobileApps() {
     queryFn: async () => (await api.get<MobileAppDto[]>(`/mobile-apps`)).data,
   });
 }
+
+export function useAlerts(status?: string) {
+  return useQuery({
+    queryKey: ["alerts", status],
+    queryFn: async () => {
+      const url = status ? `/alerts?status=${status}` : `/alerts`;
+      const res = await api.get<Page<AlertDto> | AlertDto[]>(url);
+      if (res.data && typeof res.data === "object" && "content" in res.data && Array.isArray((res.data as Page<AlertDto>).content)) {
+        return (res.data as Page<AlertDto>).content;
+      }
+      return Array.isArray(res.data) ? res.data : [];
+    },
+  });
+}
+
+export function useApiKeys(applicationId: string | undefined) {
+  return useQuery({
+    queryKey: ["api-keys", applicationId],
+    enabled: !!applicationId,
+    queryFn: async () => (await api.get<ApiKeyDto[]>(`/applications/${applicationId}/api-keys`)).data,
+  });
+}
+
