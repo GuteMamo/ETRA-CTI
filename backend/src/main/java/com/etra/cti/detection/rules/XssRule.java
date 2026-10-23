@@ -25,8 +25,17 @@ public class XssRule implements DetectionRule {
 
     @Override
     public Optional<Detection> evaluate(SecurityEvent event) {
-        String hay = String.valueOf(event.getNormalized().getOrDefault("query", ""))
-                   + " " + (event.getPath() == null ? "" : event.getPath());
+        if (event == null) return Optional.empty();
+        String path = event.getPath() == null ? "" : event.getPath();
+        String query = "";
+        String endpoint = path;
+        if (event.getNormalized() != null) {
+            query = String.valueOf(event.getNormalized().getOrDefault("query", ""));
+            Object ep = event.getNormalized().get("endpoint");
+            if (ep != null) endpoint = ep.toString();
+        }
+        String payloadStr = event.getRawPayload() != null ? event.getRawPayload().toString() : "";
+        String hay = path + " " + query + " " + payloadStr;
         var m = PATTERN.matcher(hay);
         if (!m.find()) return Optional.empty();
 
@@ -38,7 +47,7 @@ public class XssRule implements DetectionRule {
         d.setConfidence(new BigDecimal("0.850"));
         d.setDetails(Map.of(
             "matched", m.group(),
-            "endpoint", String.valueOf(event.getNormalized().get("endpoint")),
+            "endpoint", endpoint,
             "sourceIp", String.valueOf(event.getSourceIp())
         ));
         return Optional.of(d);

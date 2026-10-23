@@ -1,11 +1,16 @@
 package com.etra.cti.evidence;
 
+import com.etra.cti.application.Application;
+import com.etra.cti.application.ApplicationRepository;
 import com.etra.cti.common.exception.NotFoundException;
 import com.etra.cti.evidence.dto.EvidenceDto;
 import com.etra.cti.evidence.dto.EvidenceNoteDto;
 import com.etra.cti.evidence.dto.IntegrityResultDto;
 import com.etra.cti.finding.Finding;
 import com.etra.cti.finding.FindingRepository;
+import com.etra.cti.organization.OrganizationService;
+import com.etra.cti.project.Project;
+import com.etra.cti.project.ProjectRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -33,15 +38,24 @@ public class EvidenceService {
     private final EvidenceRepository evidenceRepo;
     private final EvidenceNoteRepository noteRepo;
     private final FindingRepository findings;
+    private final ApplicationRepository apps;
+    private final ProjectRepository projects;
+    private final OrganizationService orgService;
     private final Path storageRoot;
 
     public EvidenceService(EvidenceRepository evidenceRepo,
                            EvidenceNoteRepository noteRepo,
                            FindingRepository findings,
+                           ApplicationRepository apps,
+                           ProjectRepository projects,
+                           OrganizationService orgService,
                            @Value("${etra.evidence.storage-path}") String storagePath) throws IOException {
         this.evidenceRepo = evidenceRepo;
         this.noteRepo = noteRepo;
         this.findings = findings;
+        this.apps = apps;
+        this.projects = projects;
+        this.orgService = orgService;
         this.storageRoot = Paths.get(storagePath);
         Files.createDirectories(storageRoot);
         log.info(">>> EvidenceService initialized, storage root: {}", storageRoot.toAbsolutePath());
@@ -51,6 +65,7 @@ public class EvidenceService {
     public EvidenceDto upload(UUID findingId, MultipartFile file, UUID userId) throws IOException {
         Finding f = findings.findById(findingId)
             .orElseThrow(() -> new NotFoundException("Finding not found"));
+        validateAccess(f, userId);
 
         Path findingDir = storageRoot.resolve(findingId.toString());
         Files.createDirectories(findingDir);
@@ -79,19 +94,32 @@ public class EvidenceService {
         return EvidenceDto.from(e);
     }
 
-    public List<EvidenceDto> listForFinding(UUID findingId) {
+    public List<EvidenceDto> listForFinding(UUID findingId, UUID userId) {
+        Finding f = findings.findById(findingId)
+            .orElseThrow(() -> new NotFoundException("Finding not found"));
+        validateAccess(f, userId);
         return evidenceRepo.findByFindingId(findingId).stream().map(EvidenceDto::from).toList();
     }
 
-    public EvidenceDto get(UUID id) {
+    public List<EvidenceDto> listForFinding(UUID findingId) {
+        return listForFinding(findingId, null);
+    }
+
+    public EvidenceDto get(UUID id, UUID userId) {
         Evidence e = evidenceRepo.findById(id)
             .orElseThrow(() -> new NotFoundException("Evidence not found"));
+        validateAccess(e, userId);
         return EvidenceDto.from(e);
     }
 
-    public IntegrityResultDto verifyIntegrity(UUID evidenceId) throws IOException {
+    public EvidenceDto get(UUID id) {
+        return get(id, null);
+    }
+
+    public IntegrityResultDto verifyIntegrity(UUID evidenceId, UUID userId) throws IOException {
         Evidence e = evidenceRepo.findById(evidenceId)
             .orElseThrow(() -> new NotFoundException("Evidence not found"));
+        validateAccess(e, userId);
 
         Path p = Paths.get(e.getStoragePath());
         if (!Files.exists(p)) {
@@ -106,10 +134,15 @@ public class EvidenceService {
             status, e.getSha256(), current, Files.size(p));
     }
 
+    public IntegrityResultDto verifyIntegrity(UUID evidenceId) throws IOException {
+        return verifyIntegrity(evidenceId, null);
+    }
+
     @Transactional
     public EvidenceNoteDto addNote(UUID evidenceId, String note, UUID authorId) {
-        evidenceRepo.findById(evidenceId)
+        Evidence e = evidenceRepo.findById(evidenceId)
             .orElseThrow(() -> new NotFoundException("Evidence not found"));
+        validateAccess(e, authorId);
 
         EvidenceNote n = new EvidenceNote();
         n.setEvidenceId(evidenceId);
@@ -119,9 +152,32 @@ public class EvidenceService {
         return EvidenceNoteDto.from(n);
     }
 
-    public List<EvidenceNoteDto> listNotes(UUID evidenceId) {
+    public List<EvidenceNoteDto> listNotes(UUID evidenceId, UUID userId) {
+        Evidence e = evidenceRepo.findById(evidenceId)
+            .orElseThrow(() -> new NotFoundException("Evidence not found"));
+        validateAccess(e, userId);
         return noteRepo.findByEvidenceIdOrderByCreatedAtDesc(evidenceId)
             .stream().map(EvidenceNoteDto::from).toList();
+    }
+
+    public List<EvidenceNoteDto> listNotes(UUID evidenceId) {
+        return listNotes(evidenceId, null);
+    }
+
+    private void validateAccess(Finding f, UUID userId) {
+        if (userId == null) return;
+        Application app = apps.findById(f.getApplicationId())
+            .orElseThrow(() -> new NotFoundException("Application not found"));
+        Project project = projects.findById(app.getProjectId())
+            .orElseThrow(() -> new NotFoundException("Project not found"));
+        orgService.requireMember(project.getOrganizationId(), userId);
+    }
+
+    private void validateAccess(Evidence e, UUID userId) {
+        if (userId == null) return;
+        Finding f = findings.findById(e.getFindingId())
+            .orElseThrow(() -> new NotFoundException("Finding not found"));
+        validateAccess(f, userId);
     }
 
     // ---------- helpers ----------

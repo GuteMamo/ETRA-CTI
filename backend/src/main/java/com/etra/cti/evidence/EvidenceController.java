@@ -44,26 +44,30 @@ public class EvidenceController {
 
     @GetMapping("/findings/{findingId}/evidence")
     @PreAuthorize("hasAnyRole('ADMIN','SECURITY_MANAGER','PENTESTER','ANALYST','DEVELOPER')")
-    public List<EvidenceDto> listForFinding(@PathVariable UUID findingId) {
-        return service.listForFinding(findingId);
+    public List<EvidenceDto> listForFinding(@PathVariable UUID findingId,
+                                            @AuthenticationPrincipal JwtAuthFilter.AuthedUser me) {
+        return service.listForFinding(findingId, me != null ? me.id() : null);
     }
 
     @GetMapping("/evidence/{id}")
     @PreAuthorize("hasAnyRole('ADMIN','SECURITY_MANAGER','PENTESTER','ANALYST','DEVELOPER')")
-    public EvidenceDto get(@PathVariable UUID id) {
-        return service.get(id);
+    public EvidenceDto get(@PathVariable UUID id,
+                           @AuthenticationPrincipal JwtAuthFilter.AuthedUser me) {
+        return service.get(id, me != null ? me.id() : null);
     }
 
     @GetMapping("/evidence/{id}/verify")
     @PreAuthorize("hasAnyRole('ADMIN','SECURITY_MANAGER','PENTESTER','ANALYST')")
-    public IntegrityResultDto verifyGet(@PathVariable UUID id) throws IOException {
-        return service.verifyIntegrity(id);
+    public IntegrityResultDto verifyGet(@PathVariable UUID id,
+                                        @AuthenticationPrincipal JwtAuthFilter.AuthedUser me) throws IOException {
+        return service.verifyIntegrity(id, me != null ? me.id() : null);
     }
 
     @PostMapping("/evidence/{id}/verify")
     @PreAuthorize("hasAnyRole('ADMIN','SECURITY_MANAGER','PENTESTER','ANALYST')")
-    public IntegrityResultDto verifyPost(@PathVariable UUID id) throws IOException {
-        return service.verifyIntegrity(id);
+    public IntegrityResultDto verifyPost(@PathVariable UUID id,
+                                         @AuthenticationPrincipal JwtAuthFilter.AuthedUser me) throws IOException {
+        return service.verifyIntegrity(id, me != null ? me.id() : null);
     }
 
     @PostMapping("/evidence/{id}/notes")
@@ -72,12 +76,13 @@ public class EvidenceController {
     public EvidenceNoteDto addNote(@PathVariable UUID id,
                                    @Valid @RequestBody AddEvidenceNoteRequest req,
                                    @AuthenticationPrincipal JwtAuthFilter.AuthedUser me) {
-        return service.addNote(id, req.note(), me.id());
+        return service.addNote(id, req.note(), me != null ? me.id() : null);
     }
 
     @GetMapping("/evidence/{id}/notes")
     @PreAuthorize("hasAnyRole('ADMIN','SECURITY_MANAGER','PENTESTER','ANALYST','DEVELOPER')")
-    public List<EvidenceNoteDto> listNotes(@PathVariable UUID id) {
-        return service.listNotes(id);
+    public List<EvidenceNoteDto> listNotes(@PathVariable UUID id,
+                                           @AuthenticationPrincipal JwtAuthFilter.AuthedUser me) {
+        return service.listNotes(id, me != null ? me.id() : null);
     }
 }

@@ -38,12 +38,12 @@ public class AssetController {
 
     @GetMapping("/assets")
     public List<AssetDto> listAll(@AuthenticationPrincipal JwtAuthFilter.AuthedUser me) {
-        return service.listAll(me.id());
+        return service.listAll(me);
     }
 
     @GetMapping("/assets/{id}")
     public AssetDto get(@PathVariable UUID id,
                         @AuthenticationPrincipal JwtAuthFilter.AuthedUser me) {
-        return service.get(id, me.id());
+        return service.get(id, me);
     }
 }

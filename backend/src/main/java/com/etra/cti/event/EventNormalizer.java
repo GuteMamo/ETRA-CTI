@@ -9,7 +9,7 @@ import java.util.regex.Pattern;
 public class EventNormalizer {
 
     private static final Pattern SECRET_PATTERN = Pattern.compile(
-        "(?i)(password|passwd|pwd|secret|token|api_?key|auth|bearer)\\s*[:=]\\s*[^&\\s]+|Bearer\\s+[A-Za-z0-9._~+/-]+=*"
+        "(?i)(password|passwd|pwd|secret|client_?secret|token|access_?token|refresh_?token|api_?key|apikey|auth|authorization|bearer|cookie|credential|session_?id)\\s*[:=]\\s*[^&\\s;,]+|Bearer\\s+[A-Za-z0-9._~+/-]+=*"
     );
 
     public static Map<String, Object> normalize(IngestEventRequest req) {
@@ -34,25 +34,89 @@ public class EventNormalizer {
             req.metadata().forEach((k, v) -> {
                 if (isSensitiveKey(k)) {
                     n.put("meta." + k, "[REDACTED]");
-                } else if (v instanceof String s) {
-                    n.put("meta." + k, redact(s));
                 } else {
-                    n.put("meta." + k, v);
+                    n.put("meta." + k, redactValue(v));
                 }
             });
         }
         return n;
     }
 
-    private static boolean isSensitiveKey(String k) {
+    public static boolean isSensitiveKey(String k) {
         if (k == null) return false;
-        String lk = k.toLowerCase();
-        return lk.contains("password") || lk.contains("secret") || lk.contains("token")
-            || lk.contains("authorization") || lk.contains("cookie") || lk.contains("apikey");
+        String clean = k.toLowerCase().replaceAll("[_\\-\\s]", "");
+        return clean.contains("password")
+            || clean.contains("passwd")
+            || clean.contains("pwd")
+            || clean.contains("secret")
+            || clean.contains("token")
+            || clean.contains("apikey")
+            || clean.contains("authorization")
+            || clean.contains("authorisation")
+            || clean.contains("cookie")
+            || clean.contains("credential")
+            || clean.contains("privatekey")
+            || clean.contains("sessionid")
+            || clean.equals("auth")
+            || clean.contains("authtoken")
+            || clean.contains("authkey")
+            || clean.contains("authheader")
+            || clean.contains("authsecret");
     }
 
     public static String redact(String input) {
         if (input == null) return null;
-        return SECRET_PATTERN.matcher(input).replaceAll("$1=[REDACTED]");
+        return SECRET_PATTERN.matcher(input).replaceAll(match -> {
+            String m = match.group();
+            if (m.toLowerCase().startsWith("bearer ")) {
+                return "Bearer [REDACTED]";
+            }
+            int eq = m.indexOf('=');
+            int col = m.indexOf(':');
+            int sep = (eq >= 0 && col >= 0) ? Math.min(eq, col) : Math.max(eq, col);
+            if (sep >= 0) {
+                return m.substring(0, sep + 1) + "[REDACTED]";
+            }
+            return "[REDACTED]";
+        });
+    }
+
+    @SuppressWarnings("unchecked")
+    public static Object redactValue(Object val) {
+        if (val == null) return null;
+        if (val instanceof String s) {
+            return redact(s);
+        }
+        if (val instanceof Map<?, ?> m) {
+            return redactPayload((Map<String, Object>) m);
+        }
+        if (val instanceof java.util.Collection<?> col) {
+            java.util.List<Object> list = new java.util.ArrayList<>();
+            for (Object item : col) {
+                list.add(redactValue(item));
+            }
+            return list;
+        }
+        if (val instanceof Object[] arr) {
+            Object[] copy = new Object[arr.length];
+            for (int i = 0; i < arr.length; i++) {
+                copy[i] = redactValue(arr[i]);
+            }
+            return copy;
+        }
+        return val;
+    }
+
+    public static Map<String, Object> redactPayload(Map<String, Object> metadata) {
+        if (metadata == null) return null;
+        Map<String, Object> redacted = new HashMap<>();
+        metadata.forEach((k, v) -> {
+            if (isSensitiveKey(k)) {
+                redacted.put(k, "[REDACTED]");
+            } else {
+                redacted.put(k, redactValue(v));
+            }
+        });
+        return redacted;
     }
 }

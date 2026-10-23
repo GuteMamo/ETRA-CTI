@@ -21,4 +21,6 @@ public interface SecurityEventRepository extends JpaRepository<SecurityEvent, UU
         UUID applicationId, String sourceIp, Instant after);
 
     Page<SecurityEvent> findAllByOrderByEventTimeDesc(Pageable pageable);
+
+    Page<SecurityEvent> findByApplicationIdInOrderByEventTimeDesc(List<UUID> applicationIds, Pageable pageable);
 }

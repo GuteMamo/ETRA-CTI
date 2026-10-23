@@ -1,9 +1,11 @@
 package com.etra.cti.report;
 
+import com.etra.cti.auth.JwtAuthFilter;
 import com.etra.cti.report.dto.CampaignReportDto;
 import com.etra.cti.report.dto.FindingReportDto;
 import com.etra.cti.report.dto.SecuritySummaryReportDto;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
@@ -25,12 +27,14 @@ public class ReportController {
     }
 
     @GetMapping("/finding/{id}")
-    public FindingReportDto findingReport(@PathVariable UUID id) {
-        return service.findingReport(id);
+    public FindingReportDto findingReport(@PathVariable UUID id,
+                                          @AuthenticationPrincipal JwtAuthFilter.AuthedUser me) {
+        return service.findingReport(id, me);
     }
 
     @GetMapping("/campaign/{id}")
-    public CampaignReportDto campaignReport(@PathVariable UUID id) {
-        return service.campaignReport(id);
+    public CampaignReportDto campaignReport(@PathVariable UUID id,
+                                            @AuthenticationPrincipal JwtAuthFilter.AuthedUser me) {
+        return service.campaignReport(id, me);
     }
 }

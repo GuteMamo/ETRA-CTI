@@ -41,18 +41,20 @@ public class EventController {
     public Page<EventDto> list(
         @RequestParam(required = false) UUID applicationId,
         @RequestParam(defaultValue = "0") int page,
-        @RequestParam(defaultValue = "50") int size
+        @RequestParam(defaultValue = "50") int size,
+        @AuthenticationPrincipal JwtAuthFilter.AuthedUser me
     ) {
         if (applicationId != null) {
-            return service.listByApplication(applicationId, PageRequest.of(page, size));
+            return service.listByApplication(applicationId, PageRequest.of(page, size), me);
         }
-        return service.listAll(PageRequest.of(page, size));
+        return service.listAll(PageRequest.of(page, size), me);
     }
 
     @GetMapping("/events/{id}")
     @PreAuthorize("hasAnyRole('ADMIN','SECURITY_MANAGER','PENTESTER','ANALYST','DEVELOPER','VIEWER')")
-    public EventDto get(@PathVariable UUID id) {
-        return service.get(id);
+    public EventDto get(@PathVariable UUID id,
+                        @AuthenticationPrincipal JwtAuthFilter.AuthedUser me) {
+        return service.get(id, me);
     }
 
     @GetMapping("/applications/{appId}/events")
@@ -61,7 +63,7 @@ public class EventController {
                                      @RequestParam(defaultValue = "0") int page,
                                      @RequestParam(defaultValue = "20") int size,
                                      @AuthenticationPrincipal JwtAuthFilter.AuthedUser me) {
-        return service.listByApplication(appId, PageRequest.of(page, size));
+        return service.listByApplication(appId, PageRequest.of(page, size), me);
     }
 
     @GetMapping("/events/{id}/detections")

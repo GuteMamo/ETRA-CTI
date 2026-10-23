@@ -45,20 +45,40 @@ public class RiskEngine {
                                            Application app,
                                            double attackContext) {
         double sevScore = severityScore(severity);
-        double confScore = confidence != null
-            ? Math.min(100.0, Math.max(0.0, confidence.doubleValue() <= 1.0 ? confidence.doubleValue() * 100.0 : confidence.doubleValue()))
-            : 80.0;
-        double critScore = app != null ? criticalityScore(app.getCriticality().name()) : 50.0;
-        double expoScore = app != null ? exposureScore(app.getEnvironment().name()) : 50.0;
+        double confScore;
+        if (confidence == null) {
+            confScore = 80.0;
+        } else {
+            double cVal = confidence.doubleValue();
+            if (cVal <= 0.0) {
+                confScore = 0.0;
+            } else if (cVal <= 1.0) {
+                confScore = cVal * 100.0;
+            } else if (cVal >= 100.0) {
+                confScore = 100.0;
+            } else {
+                confScore = cVal;
+            }
+        }
+
+        double critScore = (app != null && app.getCriticality() != null)
+            ? criticalityScore(app.getCriticality().name())
+            : 50.0;
+        double expoScore = (app != null && app.getEnvironment() != null)
+            ? exposureScore(app.getEnvironment().name())
+            : 50.0;
 
         // Documented formula: 0.40*sev + 0.25*conf + 0.20*crit + 0.15*expo
         double base = (0.40 * sevScore) + (0.25 * confScore) + (0.20 * critScore) + (0.15 * expoScore);
 
-        // Active attack context boost if multi-stage attacks exist
-        double ctx = Math.min(Math.max(attackContext, 1.0), 1.5);
-        double scaled = Math.min(100.0, base * ctx);
+        // Active attack context boost if multi-stage attacks exist (bounded between 1.0 and 1.5)
+        double ctx = (Double.isNaN(attackContext) || Double.isInfinite(attackContext))
+            ? 1.0
+            : Math.min(Math.max(attackContext, 1.0), 1.5);
+        double scaled = Math.min(100.0, Math.max(0.0, base * ctx));
 
-        BigDecimal finalScore = BigDecimal.valueOf(Math.round(scaled * 10.0) / 10.0).setScale(1, RoundingMode.HALF_UP);
+        double rounded = Math.min(100.0, Math.max(0.0, Math.round(scaled * 10.0) / 10.0));
+        BigDecimal finalScore = BigDecimal.valueOf(rounded).setScale(1, RoundingMode.HALF_UP);
         String band = band(finalScore.doubleValue());
 
         return new RiskBreakdown(sevScore, confScore, critScore, expoScore, finalScore, band);

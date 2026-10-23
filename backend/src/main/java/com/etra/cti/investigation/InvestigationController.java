@@ -26,40 +26,45 @@ public class InvestigationController {
     @PreAuthorize("hasAnyRole('ADMIN','SECURITY_MANAGER','ANALYST')")
     public InvestigationDto create(@Valid @RequestBody CreateInvestigationRequest req,
                                    @AuthenticationPrincipal JwtAuthFilter.AuthedUser me) {
-        return service.create(req, me.id());
+        return service.create(req, me);
     }
 
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN','SECURITY_MANAGER','ANALYST','PENTESTER','DEVELOPER','VIEWER')")
     public List<InvestigationDto> list(@RequestParam(required = false) InvestigationStatus status,
-                                       @RequestParam(required = false) UUID assignedTo) {
-        return service.list(status, assignedTo);
+                                       @RequestParam(required = false) UUID assignedTo,
+                                       @AuthenticationPrincipal JwtAuthFilter.AuthedUser me) {
+        return service.list(status, assignedTo, me);
     }
 
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN','SECURITY_MANAGER','ANALYST','PENTESTER','DEVELOPER','VIEWER')")
-    public InvestigationDto get(@PathVariable UUID id) {
-        return service.get(id);
+    public InvestigationDto get(@PathVariable UUID id,
+                                @AuthenticationPrincipal JwtAuthFilter.AuthedUser me) {
+        return service.get(id, me);
     }
 
     @GetMapping("/{id}/summary")
     @PreAuthorize("hasAnyRole('ADMIN','SECURITY_MANAGER','ANALYST','PENTESTER','DEVELOPER','VIEWER')")
-    public InvestigationSummaryDto summary(@PathVariable UUID id) {
-        return service.summary(id);
+    public InvestigationSummaryDto summary(@PathVariable UUID id,
+                                           @AuthenticationPrincipal JwtAuthFilter.AuthedUser me) {
+        return service.summary(id, me);
     }
 
     @PatchMapping("/{id}/status")
     @PreAuthorize("hasAnyRole('ADMIN','SECURITY_MANAGER','ANALYST')")
     public InvestigationDto updateStatus(@PathVariable UUID id,
-                                         @Valid @RequestBody UpdateInvestigationStatusRequest req) {
-        return service.updateStatus(id, req.status());
+                                         @Valid @RequestBody UpdateInvestigationStatusRequest req,
+                                         @AuthenticationPrincipal JwtAuthFilter.AuthedUser me) {
+        return service.updateStatus(id, req.status(), me);
     }
 
     @PostMapping("/{id}/assign")
     @PreAuthorize("hasAnyRole('ADMIN','SECURITY_MANAGER','ANALYST')")
     public InvestigationDto assign(@PathVariable UUID id,
-                                   @Valid @RequestBody AssignInvestigationRequest req) {
-        return service.assign(id, req.assignedTo());
+                                   @Valid @RequestBody AssignInvestigationRequest req,
+                                   @AuthenticationPrincipal JwtAuthFilter.AuthedUser me) {
+        return service.assign(id, req.assignedTo(), me);
     }
 
     @PostMapping("/{id}/notes")
@@ -68,19 +73,22 @@ public class InvestigationController {
     public NoteDto addNote(@PathVariable UUID id,
                            @Valid @RequestBody AddNoteRequest req,
                            @AuthenticationPrincipal JwtAuthFilter.AuthedUser me) {
-        return service.addNote(id, req.note(), me.id());
+        return service.addNote(id, req.note(), me);
     }
 
     @GetMapping("/{id}/notes")
     @PreAuthorize("hasAnyRole('ADMIN','SECURITY_MANAGER','ANALYST','PENTESTER','DEVELOPER','VIEWER')")
-    public List<NoteDto> notes(@PathVariable UUID id) {
-        return service.listNotes(id);
+    public List<NoteDto> notes(@PathVariable UUID id,
+                               @AuthenticationPrincipal JwtAuthFilter.AuthedUser me) {
+        return service.listNotes(id, me);
     }
 
     @PostMapping("/{id}/findings/{findingId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @PreAuthorize("hasAnyRole('ADMIN','SECURITY_MANAGER','ANALYST')")
-    public void linkFinding(@PathVariable UUID id, @PathVariable UUID findingId) {
-        service.linkFinding(id, findingId);
+    public void linkFinding(@PathVariable UUID id,
+                            @PathVariable UUID findingId,
+                            @AuthenticationPrincipal JwtAuthFilter.AuthedUser me) {
+        service.linkFinding(id, findingId, me);
     }
 }

@@ -17,6 +17,7 @@ import com.etra.cti.project.ProjectRepository;
 import com.etra.cti.threatintel.Ioc;
 import com.etra.cti.threatintel.IocType;
 import com.etra.cti.threatintel.ThreatIntelService;
+import com.etra.cti.organization.dto.OrganizationDto;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
@@ -26,6 +27,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -95,10 +97,10 @@ public class EventService {
         e.setEventTime(req.timestamp());
         e.setSourceIp(req.sourceIp());
         e.setMethod(req.method());
-        e.setPath(req.path());
+        e.setPath(EventNormalizer.redact(req.path()));
         e.setStatusCode(req.statusCode());
         e.setUserIdentifier(req.userId());
-        e.setRawPayload(req.metadata());
+        e.setRawPayload(EventNormalizer.redactPayload(req.metadata()));
         e.setNormalized(EventNormalizer.normalize(req));
         events.save(e);
 
@@ -138,17 +140,61 @@ public class EventService {
             e.getId(), e.getSourceIp(), ioc.getSource());
     }
 
-    public Page<EventDto> listByApplication(UUID applicationId, Pageable pageable) {
+    public Page<EventDto> listByApplication(UUID applicationId, Pageable pageable, JwtAuthFilter.AuthedUser caller) {
+        if (caller != null && !"ADMIN".equalsIgnoreCase(caller.role()) && !orgService.isPlatformStaff(caller.id())) {
+            Application a = apps.findById(applicationId)
+                .orElseThrow(() -> new NotFoundException("Application not found"));
+            Project p = projects.findById(a.getProjectId())
+                .orElseThrow(() -> new NotFoundException("Project not found"));
+            orgService.requireMember(p.getOrganizationId(), caller.id());
+        }
         return events.findByApplicationIdOrderByEventTimeDesc(applicationId, pageable).map(EventDto::from);
     }
 
-    public Page<EventDto> listAll(Pageable pageable) {
+    public Page<EventDto> listByApplication(UUID applicationId, Pageable pageable) {
+        return listByApplication(applicationId, pageable, null);
+    }
+
+    public Page<EventDto> listAll(Pageable pageable, JwtAuthFilter.AuthedUser caller) {
+        if (caller != null && !"ADMIN".equalsIgnoreCase(caller.role()) && !orgService.isPlatformStaff(caller.id())) {
+            List<UUID> orgIds = orgService.listMine(caller.id()).stream()
+                .map(OrganizationDto::id)
+                .toList();
+            if (orgIds.isEmpty()) {
+                return Page.empty(pageable);
+            }
+            List<UUID> appIds = orgIds.stream()
+                .flatMap(orgId -> projects.findByOrganizationId(orgId).stream())
+                .flatMap(project -> apps.findByProjectId(project.getId()).stream())
+                .map(Application::getId)
+                .distinct()
+                .toList();
+            if (appIds.isEmpty()) {
+                return Page.empty(pageable);
+            }
+            return events.findByApplicationIdInOrderByEventTimeDesc(appIds, pageable).map(EventDto::from);
+        }
         return events.findAllByOrderByEventTimeDesc(pageable).map(EventDto::from);
     }
 
-    public EventDto get(UUID id) {
+    public Page<EventDto> listAll(Pageable pageable) {
+        return listAll(pageable, null);
+    }
+
+    public EventDto get(UUID id, JwtAuthFilter.AuthedUser caller) {
         SecurityEvent e = events.findById(id)
             .orElseThrow(() -> new NotFoundException("Security event not found"));
+        if (caller != null && !"ADMIN".equalsIgnoreCase(caller.role())) {
+            Application a = apps.findById(e.getApplicationId())
+                .orElseThrow(() -> new NotFoundException("Application not found"));
+            Project p = projects.findById(a.getProjectId())
+                .orElseThrow(() -> new NotFoundException("Project not found"));
+            orgService.requireMember(p.getOrganizationId(), caller.id());
+        }
         return EventDto.from(e);
+    }
+
+    public EventDto get(UUID id) {
+        return get(id, null);
     }
 }

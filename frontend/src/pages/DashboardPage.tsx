@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import {
-  AlertTriangle, Swords, Search, Shield, TrendingUp, Activity
+  AlertTriangle, Swords, Search, Shield, TrendingUp, Activity, ExternalLink
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -14,6 +15,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { api } from "@/lib/api";
 import { useCampaigns, useFindings, useInvestigations } from "@/lib/queries";
 import { formatRelative } from "@/lib/utils";
+import type { EventDto } from "@/lib/types";
 
 const SEVERITY_COLORS: Record<string, string> = {
   LOW: "#3b82f6",
@@ -21,6 +23,37 @@ const SEVERITY_COLORS: Record<string, string> = {
   HIGH: "#f97316",
   CRITICAL: "#ef4444",
 };
+
+function getMethodBadge(method?: string) {
+  if (!method) return null;
+  const m = method.toUpperCase();
+  const colorMap: Record<string, string> = {
+    GET: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
+    POST: "bg-blue-500/15 text-blue-300 border-blue-500/30",
+    PUT: "bg-amber-500/15 text-amber-300 border-amber-500/30",
+    PATCH: "bg-purple-500/15 text-purple-300 border-purple-500/30",
+    DELETE: "bg-red-500/15 text-red-300 border-red-500/30",
+  };
+  return (
+    <Badge className={colorMap[m] ?? "bg-slate-800 text-slate-300 border-slate-700"}>
+      {m}
+    </Badge>
+  );
+}
+
+function getStatusBadge(code?: number) {
+  if (!code) return <span className="text-slate-500">—</span>;
+  if (code >= 200 && code < 300) {
+    return <Badge className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30">{code}</Badge>;
+  }
+  if (code >= 300 && code < 400) {
+    return <Badge className="bg-blue-500/15 text-blue-400 border-blue-500/30">{code}</Badge>;
+  }
+  if (code >= 400 && code < 500) {
+    return <Badge className="bg-amber-500/15 text-amber-400 border-amber-500/30">{code}</Badge>;
+  }
+  return <Badge className="bg-red-500/15 text-red-400 border-red-500/30">{code}</Badge>;
+}
 
 export function DashboardPage() {
   const findingsQ = useFindings(0, 100);
@@ -30,12 +63,21 @@ export function DashboardPage() {
   const appsQ = useQuery({
     queryKey: ["apps-all"],
     queryFn: async () => (await api.get<unknown[]>("/applications")).data,
+    refetchInterval: 3000,
+  });
+
+  const eventsQ = useQuery({
+    queryKey: ["dashboard-recent-events"],
+    queryFn: async () => (await api.get<{ content: EventDto[]; totalElements: number }>("/events?page=0&size=6")).data,
+    refetchInterval: 2500,
   });
 
   const findings = findingsQ.data?.content ?? [];
   const campaigns = campaignsQ.data ?? [];
   const investigations = investigationsQ.data ?? [];
   const apps = appsQ.data ?? [];
+  const recentEvents = eventsQ.data?.content ?? [];
+  const totalEvents = eventsQ.data?.totalElements ?? 0;
 
   const criticalCount = findings.filter(f => f.severity === "CRITICAL").length;
   const highCount = findings.filter(f => f.severity === "HIGH").length;
@@ -73,10 +115,12 @@ export function DashboardPage() {
           <StatCard label="Attack Campaigns" value={campaigns.length} icon={Swords} tone="red" />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard label="Security Events" value={totalEvents} icon={Activity} tone="emerald"
+            hint="Telemetry ingested" />
           <StatCard label="Investigations" value={investigations.length} icon={Search} tone="blue" />
           <StatCard label="Active Threats" value={campaigns.filter(c => c.status === "OPEN").length}
-            icon={Activity} tone="orange" />
+            icon={Swords} tone="orange" />
           <StatCard label="Mean Risk Score"
             value={
               findings.length
@@ -227,6 +271,67 @@ export function DashboardPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Recent Ingested Telemetry Events */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <Activity className="h-4 w-4 text-emerald-400" />
+                <span>Recent Ingested Security Telemetry</span>
+                <Badge className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 font-mono text-xs ml-2">
+                  {totalEvents} events
+                </Badge>
+              </CardTitle>
+              <Link to="/events" className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 font-medium transition-colors">
+                <span>View All Ingested Events</span>
+                <ExternalLink className="h-3 w-3" />
+              </Link>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {recentEvents.length === 0 ? (
+              <EmptyState icon={Activity} title="No security events yet" description="Machine-to-machine telemetry events will appear here once ingested via API." />
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-800 text-slate-400">
+                      <th className="pb-2 font-medium">Time</th>
+                      <th className="pb-2 font-medium">Method</th>
+                      <th className="pb-2 font-medium">Path</th>
+                      <th className="pb-2 font-medium">Status</th>
+                      <th className="pb-2 font-medium">Source IP</th>
+                      <th className="pb-2 font-medium">Identity / Client</th>
+                      <th className="pb-2 font-medium text-right">Event UUID</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/60 text-slate-300">
+                    {recentEvents.map((ev) => (
+                      <tr key={ev.id} className="hover:bg-slate-900/40 transition-colors">
+                        <td className="py-2.5 font-mono text-slate-400 whitespace-nowrap">
+                          {formatRelative(ev.eventTime)}
+                        </td>
+                        <td className="py-2.5">{getMethodBadge(ev.method)}</td>
+                        <td className="py-2.5 font-mono text-slate-200 truncate max-w-[200px]" title={ev.path}>
+                          {ev.path ?? "—"}
+                        </td>
+                        <td className="py-2.5">{getStatusBadge(ev.statusCode)}</td>
+                        <td className="py-2.5 font-mono text-slate-400">{ev.sourceIp ?? "—"}</td>
+                        <td className="py-2.5 font-mono text-slate-400">{ev.userIdentifier ?? "—"}</td>
+                        <td className="py-2.5 text-right font-mono text-[11px] text-blue-400 truncate max-w-[140px]" title={ev.id}>
+                          <Link to="/events" className="hover:underline">
+                            {ev.id.substring(0, 8)}…
+                          </Link>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </>
   );

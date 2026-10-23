@@ -15,4 +15,6 @@ public interface AttackCampaignRepository extends JpaRepository<AttackCampaign, 
         UUID applicationId, String sourceIp, Instant after);
 
     List<AttackCampaign> findByApplicationIdOrderByLastSeenDesc(UUID applicationId);
+
+    List<AttackCampaign> findByApplicationIdInOrderByLastSeenDesc(java.util.Collection<UUID> applicationIds);
 }

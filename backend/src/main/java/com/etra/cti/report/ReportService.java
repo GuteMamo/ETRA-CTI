@@ -22,6 +22,10 @@ import com.etra.cti.remediation.dto.RemediationDto;
 import com.etra.cti.remediation.dto.RetestDto;
 import com.etra.cti.report.dto.CampaignReportDto;
 import com.etra.cti.report.dto.FindingReportDto;
+import com.etra.cti.auth.JwtAuthFilter;
+import com.etra.cti.organization.OrganizationService;
+import com.etra.cti.project.Project;
+import com.etra.cti.project.ProjectRepository;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -40,6 +44,8 @@ public class ReportService {
     private final AuditService audit;
     private final AttackCampaignRepository campaigns;
     private final CampaignEventRepository campaignEvents;
+    private final ProjectRepository projects;
+    private final OrganizationService orgService;
 
     public ReportService(FindingRepository findings,
                          ApplicationRepository apps,
@@ -48,7 +54,9 @@ public class ReportService {
                          RetestRepository retests,
                          AuditService audit,
                          AttackCampaignRepository campaigns,
-                         CampaignEventRepository campaignEvents) {
+                         CampaignEventRepository campaignEvents,
+                         ProjectRepository projects,
+                         OrganizationService orgService) {
         this.findings = findings;
         this.apps = apps;
         this.evidence = evidence;
@@ -57,14 +65,22 @@ public class ReportService {
         this.audit = audit;
         this.campaigns = campaigns;
         this.campaignEvents = campaignEvents;
+        this.projects = projects;
+        this.orgService = orgService;
     }
 
-    public FindingReportDto findingReport(UUID findingId) {
+    public FindingReportDto findingReport(UUID findingId, JwtAuthFilter.AuthedUser caller) {
         Finding f = findings.findById(findingId)
             .orElseThrow(() -> new NotFoundException("Finding not found"));
 
         Application app = apps.findById(f.getApplicationId())
             .orElseThrow(() -> new NotFoundException("Application not found"));
+
+        if (caller != null && !"ADMIN".equalsIgnoreCase(caller.role())) {
+            Project project = projects.findById(app.getProjectId())
+                .orElseThrow(() -> new NotFoundException("Project not found"));
+            orgService.requireMember(project.getOrganizationId(), caller.id());
+        }
 
         List<EvidenceDto> evs = evidence.findByFindingId(findingId)
             .stream().map(EvidenceDto::from).toList();
@@ -88,11 +104,23 @@ public class ReportService {
         );
     }
 
-    public CampaignReportDto campaignReport(UUID campaignId) {
+    public FindingReportDto findingReport(UUID findingId) {
+        return findingReport(findingId, null);
+    }
+
+    public CampaignReportDto campaignReport(UUID campaignId, JwtAuthFilter.AuthedUser caller) {
         AttackCampaign c = campaigns.findById(campaignId)
             .orElseThrow(() -> new NotFoundException("Campaign not found"));
 
         Application app = apps.findById(c.getApplicationId()).orElse(null);
+
+        if (caller != null && !"ADMIN".equalsIgnoreCase(caller.role())) {
+            if (app != null) {
+                Project project = projects.findById(app.getProjectId())
+                    .orElseThrow(() -> new NotFoundException("Project not found"));
+                orgService.requireMember(project.getOrganizationId(), caller.id());
+            }
+        }
 
         List<CampaignEventDto> timeline = campaignEvents
             .findByCampaignIdOrderBySequenceNoAsc(campaignId)

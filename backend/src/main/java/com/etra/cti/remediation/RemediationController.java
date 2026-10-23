@@ -27,15 +27,17 @@ public class RemediationController {
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAnyRole('ADMIN','SECURITY_MANAGER','ANALYST','DEVELOPER')")
     public RemediationDto start(@PathVariable UUID findingId,
-                                @Valid @RequestBody StartRemediationRequest req) {
-        return service.start(findingId, req.developerId());
+                                @Valid @RequestBody StartRemediationRequest req,
+                                @AuthenticationPrincipal JwtAuthFilter.AuthedUser me) {
+        return service.start(findingId, req.developerId(), me);
     }
 
     @PostMapping("/findings/{findingId}/remediation/ready")
     @PreAuthorize("hasAnyRole('ADMIN','SECURITY_MANAGER','ANALYST','DEVELOPER')")
     public RemediationDto markFixed(@PathVariable UUID findingId,
-                                    @RequestBody MarkFixedRequest req) {
-        return service.markFixed(findingId, req);
+                                    @RequestBody MarkFixedRequest req,
+                                    @AuthenticationPrincipal JwtAuthFilter.AuthedUser me) {
+        return service.markFixed(findingId, req, me);
     }
 
     @PostMapping({"/findings/{findingId}/retest", "/findings/{findingId}/retests"})
@@ -44,7 +46,7 @@ public class RemediationController {
     public RetestDto retest(@PathVariable UUID findingId,
                             @Valid @RequestBody PerformRetestRequest req,
                             @AuthenticationPrincipal JwtAuthFilter.AuthedUser me) {
-        return service.performRetest(findingId, req, me.id());
+        return service.performRetest(findingId, req, me);
     }
 
     // ===== READ ACTIONS (workflow roles only) =====
@@ -52,14 +54,16 @@ public class RemediationController {
 
     @GetMapping({"/findings/{findingId}/remediation", "/findings/{findingId}/remediations"})
     @PreAuthorize("hasAnyRole('ADMIN','SECURITY_MANAGER','PENTESTER','ANALYST','DEVELOPER')")
-    public RemediationDto get(@PathVariable UUID findingId) {
-        return service.get(findingId);
+    public RemediationDto get(@PathVariable UUID findingId,
+                              @AuthenticationPrincipal JwtAuthFilter.AuthedUser me) {
+        return service.get(findingId, me);
     }
 
     @GetMapping("/findings/{findingId}/retests")
     @PreAuthorize("hasAnyRole('ADMIN','SECURITY_MANAGER','PENTESTER','ANALYST','DEVELOPER')")
-    public List<RetestDto> listRetests(@PathVariable UUID findingId) {
-        return service.listRetests(findingId);
+    public List<RetestDto> listRetests(@PathVariable UUID findingId,
+                                       @AuthenticationPrincipal JwtAuthFilter.AuthedUser me) {
+        return service.listRetests(findingId, me);
     }
 
     @GetMapping("/remediations")

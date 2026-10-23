@@ -7,4 +7,5 @@ import java.util.UUID;
 
 public interface AssetRepository extends JpaRepository<Asset, UUID> {
     List<Asset> findByApplicationId(UUID applicationId);
+    List<Asset> findByApplicationIdIn(java.util.Collection<UUID> applicationIds);
 }

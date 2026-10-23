@@ -45,7 +45,7 @@ public class ProjectService {
 
     public ProjectDto get(UUID projectId, UUID userId) {
         Project p = projects.findById(projectId)
-            .orElseThrow(() -> new NotFoundException("Project not found"));
+                .orElseThrow(() -> new NotFoundException("Project not found"));
         orgService.requireMember(p.getOrganizationId(), userId);
         return ProjectDto.from(p);
     }

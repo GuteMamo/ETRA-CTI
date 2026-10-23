@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, AlertTriangle, Bell, Swords, Search, FileCheck,
-  Upload, Smartphone, Shield, Target, LogOut, Users as UsersIcon, KeyRound
+  Upload, Smartphone, Shield, Target, LogOut, Users as UsersIcon, KeyRound, Activity
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -19,6 +19,8 @@ const links: LinkDef[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true, roles: ["*"] },
   { to: "/applications", label: "Applications & Keys", icon: KeyRound,
     roles: ["ADMIN", "SECURITY_MANAGER", "ANALYST", "DEVELOPER", "PENTESTER"] },
+  { to: "/events", label: "Security Events", icon: Activity,
+    roles: ["ADMIN", "SECURITY_MANAGER", "ANALYST", "DEVELOPER", "PENTESTER", "VIEWER"] },
   { to: "/alerts", label: "Alerts", icon: Bell,
     roles: ["ADMIN", "SECURITY_MANAGER", "ANALYST", "PENTESTER"] },
   { to: "/findings", label: "Findings", icon: AlertTriangle, roles: ["*"] },

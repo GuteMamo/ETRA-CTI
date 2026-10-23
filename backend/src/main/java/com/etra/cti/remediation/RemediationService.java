@@ -1,10 +1,16 @@
 package com.etra.cti.remediation;
 
+import com.etra.cti.application.Application;
+import com.etra.cti.application.ApplicationRepository;
 import com.etra.cti.audit.AuditService;
+import com.etra.cti.auth.JwtAuthFilter;
 import com.etra.cti.common.exception.NotFoundException;
 import com.etra.cti.finding.Finding;
 import com.etra.cti.finding.FindingRepository;
 import com.etra.cti.finding.FindingStatus;
+import com.etra.cti.organization.OrganizationService;
+import com.etra.cti.project.Project;
+import com.etra.cti.project.ProjectRepository;
 import com.etra.cti.remediation.dto.*;
 import com.etra.cti.user.User;
 import com.etra.cti.user.UserRepository;
@@ -30,23 +36,33 @@ public class RemediationService {
     private final FindingRepository findings;
     private final UserRepository users;
     private final AuditService audit;
+    private final ApplicationRepository apps;
+    private final ProjectRepository projects;
+    private final OrganizationService orgService;
 
     public RemediationService(RemediationRepository remediations,
                               RetestRepository retests,
                               FindingRepository findings,
                               UserRepository users,
-                              AuditService audit) {
+                              AuditService audit,
+                              ApplicationRepository apps,
+                              ProjectRepository projects,
+                              OrganizationService orgService) {
         this.remediations = remediations;
         this.retests = retests;
         this.findings = findings;
         this.users = users;
         this.audit = audit;
+        this.apps = apps;
+        this.projects = projects;
+        this.orgService = orgService;
     }
 
     @Transactional
-    public RemediationDto start(UUID findingId, UUID developerId) {
+    public RemediationDto start(UUID findingId, UUID developerId, JwtAuthFilter.AuthedUser caller) {
         Finding f = findings.findById(findingId)
             .orElseThrow(() -> new NotFoundException("Finding not found"));
+        validateAccess(f, caller);
 
         Remediation r = remediations.findByFindingId(findingId).orElseGet(() -> {
             Remediation nr = new Remediation();
@@ -70,9 +86,16 @@ public class RemediationService {
     }
 
     @Transactional
-    public RemediationDto markFixed(UUID findingId, MarkFixedRequest req) {
+    public RemediationDto start(UUID findingId, UUID developerId) {
+        return start(findingId, developerId, null);
+    }
+
+    @Transactional
+    public RemediationDto markFixed(UUID findingId, MarkFixedRequest req, JwtAuthFilter.AuthedUser caller) {
         Finding f = findings.findById(findingId)
             .orElseThrow(() -> new NotFoundException("Finding not found"));
+        validateAccess(f, caller);
+
         Remediation r = remediations.findByFindingId(findingId).orElseGet(() -> {
             Remediation nr = new Remediation();
             nr.setFindingId(findingId);
@@ -97,12 +120,71 @@ public class RemediationService {
     }
 
     @Transactional
+    public RemediationDto markFixed(UUID findingId, MarkFixedRequest req) {
+        return markFixed(findingId, req, null);
+    }
+
+    @Transactional
+    public RetestDto performRetest(UUID findingId, PerformRetestRequest req, JwtAuthFilter.AuthedUser caller) {
+        Finding f = findings.findById(findingId)
+            .orElseThrow(() -> new NotFoundException("Finding not found"));
+        validateAccess(f, caller);
+
+        UUID performedBy = caller != null ? caller.id() : null;
+        Remediation r = remediations.findByFindingId(findingId).orElse(null);
+
+        // Enforce separation of duties: developer cannot independently verify their own fix
+        if (r != null && r.getDeveloperId() != null && r.getDeveloperId().equals(performedBy)) {
+            User verifier = performedBy != null ? users.findById(performedBy).orElse(null) : null;
+            if (verifier != null && verifier.getRole() == UserRole.DEVELOPER) {
+                throw new AccessDeniedException("Separation of duties: Developers cannot independently verify their own remediation fixes.");
+            }
+        }
+
+        Retest rt = new Retest();
+        rt.setFindingId(findingId);
+        rt.setRemediationId(r == null ? null : r.getId());
+        rt.setPerformedBy(performedBy);
+        rt.setResult(req.result());
+        rt.setNotes(req.notes());
+        retests.save(rt);
+
+        switch (req.result()) {
+            case PASS -> {
+                f.setStatus(FindingStatus.VERIFIED);
+                if (r != null) {
+                    r.setStatus(RemediationStatus.VERIFIED);
+                    r.setVerifiedAt(Instant.now());
+                    remediations.save(r);
+                }
+                log.info(">>> Retest PASSED for finding {}, marking VERIFIED", findingId);
+            }
+            case FAIL -> {
+                f.setStatus(FindingStatus.REOPENED);
+                if (r != null) {
+                    r.setStatus(RemediationStatus.REOPENED);
+                    r.setReopenedCount(r.getReopenedCount() + 1);
+                    remediations.save(r);
+                }
+                log.info(">>> Retest FAILED for finding {}, REOPENING (attempt #{})",
+                    findingId, r == null ? 1 : r.getReopenedCount());
+            }
+            case INCONCLUSIVE -> log.info(">>> Retest INCONCLUSIVE for finding {}", findingId);
+        }
+        findings.save(f);
+
+        audit.record(performedBy, "RETEST_PERFORMED", "Finding", findingId.toString(),
+            Map.of("result", req.result().name(), "notes", req.notes() != null ? req.notes() : ""));
+
+        return RetestDto.from(rt);
+    }
+
+    @Transactional
     public RetestDto performRetest(UUID findingId, PerformRetestRequest req, UUID performedBy) {
         Finding f = findings.findById(findingId)
             .orElseThrow(() -> new NotFoundException("Finding not found"));
         Remediation r = remediations.findByFindingId(findingId).orElse(null);
 
-        // Enforce separation of duties: developer cannot independently verify their own fix
         if (r != null && r.getDeveloperId() != null && r.getDeveloperId().equals(performedBy)) {
             User verifier = users.findById(performedBy).orElse(null);
             if (verifier != null && verifier.getRole() == UserRole.DEVELOPER) {
@@ -148,6 +230,15 @@ public class RemediationService {
         return RetestDto.from(rt);
     }
 
+    public RemediationDto get(UUID findingId, JwtAuthFilter.AuthedUser caller) {
+        Finding f = findings.findById(findingId)
+            .orElseThrow(() -> new NotFoundException("Finding not found"));
+        validateAccess(f, caller);
+        Remediation r = remediations.findByFindingId(findingId)
+            .orElseThrow(() -> new NotFoundException("No remediation for this finding"));
+        return RemediationDto.from(r);
+    }
+
     public RemediationDto get(UUID findingId) {
         Remediation r = remediations.findByFindingId(findingId)
             .orElseThrow(() -> new NotFoundException("No remediation for this finding"));
@@ -166,8 +257,27 @@ public class RemediationService {
         return list.stream().map(RemediationDto::from).toList();
     }
 
+    public List<RetestDto> listRetests(UUID findingId, JwtAuthFilter.AuthedUser caller) {
+        Finding f = findings.findById(findingId)
+            .orElseThrow(() -> new NotFoundException("Finding not found"));
+        validateAccess(f, caller);
+        return retests.findByFindingIdOrderByCreatedAtDesc(findingId)
+            .stream().map(RetestDto::from).toList();
+    }
+
     public List<RetestDto> listRetests(UUID findingId) {
         return retests.findByFindingIdOrderByCreatedAtDesc(findingId)
             .stream().map(RetestDto::from).toList();
+    }
+
+    private void validateAccess(Finding f, JwtAuthFilter.AuthedUser caller) {
+        if (caller == null || "ADMIN".equalsIgnoreCase(caller.role())) {
+            return;
+        }
+        Application app = apps.findById(f.getApplicationId())
+            .orElseThrow(() -> new NotFoundException("Application not found"));
+        Project project = projects.findById(app.getProjectId())
+            .orElseThrow(() -> new NotFoundException("Project not found"));
+        orgService.requireMember(project.getOrganizationId(), caller.id());
     }
 }

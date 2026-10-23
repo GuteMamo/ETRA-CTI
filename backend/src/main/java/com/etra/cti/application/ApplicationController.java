@@ -31,6 +31,15 @@ public class ApplicationController {
         return service.create(projectId, req, me.id());
     }
 
+    @PostMapping("/applications")
+    @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("!hasRole('VIEWER')")
+    public ApplicationDto createDirect(@RequestParam(required = false) UUID projectId,
+                                       @Valid @RequestBody CreateApplicationRequest req,
+                                       @AuthenticationPrincipal JwtAuthFilter.AuthedUser me) {
+        return service.create(req, projectId, me.id());
+    }
+
     @GetMapping("/projects/{projectId}/applications")
     @PreAuthorize("hasAnyRole('ADMIN','SECURITY_MANAGER','PENTESTER','ANALYST','DEVELOPER','VIEWER')")
     public List<ApplicationDto> list(@PathVariable UUID projectId,

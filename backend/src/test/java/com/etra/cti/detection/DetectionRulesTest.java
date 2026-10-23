@@ -138,4 +138,23 @@ class DetectionRulesTest {
         assertEquals("AUTH_FAILURE_BURST", detection.get().getType());
         assertEquals(Severity.HIGH, detection.get().getSeverity());
     }
+
+    @Test
+    @DisplayName("PathTraversalRule and XssRule safely handle null normalized map and null event")
+    void testRulesHandleNullNormalizedMapGracefully() {
+        PathTraversalRule ptRule = new PathTraversalRule();
+        XssRule xssRule = new XssRule();
+
+        SecurityEvent nullEvent = null;
+        assertFalse(ptRule.evaluate(nullEvent).isPresent());
+        assertFalse(xssRule.evaluate(nullEvent).isPresent());
+
+        SecurityEvent eventWithNullNormalized = new SecurityEvent();
+        eventWithNullNormalized.setId(UUID.randomUUID());
+        eventWithNullNormalized.setPath(null);
+        eventWithNullNormalized.setNormalized(null);
+
+        assertDoesNotThrow(() -> assertFalse(ptRule.evaluate(eventWithNullNormalized).isPresent()));
+        assertDoesNotThrow(() -> assertFalse(xssRule.evaluate(eventWithNullNormalized).isPresent()));
+    }
 }

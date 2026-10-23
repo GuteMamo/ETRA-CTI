@@ -25,22 +25,23 @@ public class ApplicationApiKeyController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasAnyRole('ADMIN','SECURITY_MANAGER','ANALYST')")
+    @PreAuthorize("!hasRole('VIEWER')")
     public ApiKeyCreatedResponse createApiKey(@PathVariable UUID applicationId,
-                                              @Valid @RequestBody CreateApiKeyRequest req,
+                                              @Valid @RequestBody(required = false) CreateApiKeyRequest req,
                                               @AuthenticationPrincipal JwtAuthFilter.AuthedUser me) {
-        return apiKeyService.createApiKey(applicationId, req, me.id());
+        CreateApiKeyRequest effectiveReq = (req != null) ? req : new CreateApiKeyRequest(null, 30);
+        return apiKeyService.createApiKey(applicationId, effectiveReq, me.id());
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN','SECURITY_MANAGER','PENTESTER','ANALYST','DEVELOPER')")
+    @PreAuthorize("hasAnyRole('ADMIN','SECURITY_MANAGER','PENTESTER','ANALYST','DEVELOPER','VIEWER')")
     public List<ApiKeyDto> listApiKeys(@PathVariable UUID applicationId,
                                        @AuthenticationPrincipal JwtAuthFilter.AuthedUser me) {
         return apiKeyService.listKeys(applicationId, me.id());
     }
 
     @PostMapping("/{keyId}/revoke")
-    @PreAuthorize("hasAnyRole('ADMIN','SECURITY_MANAGER','ANALYST')")
+    @PreAuthorize("!hasRole('VIEWER')")
     public ApiKeyDto revokeApiKeyPost(@PathVariable UUID applicationId,
                                       @PathVariable UUID keyId,
                                       @AuthenticationPrincipal JwtAuthFilter.AuthedUser me) {
@@ -48,7 +49,7 @@ public class ApplicationApiKeyController {
     }
 
     @DeleteMapping("/{keyId}")
-    @PreAuthorize("hasAnyRole('ADMIN','SECURITY_MANAGER','ANALYST')")
+    @PreAuthorize("!hasRole('VIEWER')")
     public ApiKeyDto revokeApiKeyDelete(@PathVariable UUID applicationId,
                                         @PathVariable UUID keyId,
                                         @AuthenticationPrincipal JwtAuthFilter.AuthedUser me) {

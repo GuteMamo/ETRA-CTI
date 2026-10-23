@@ -43,25 +43,26 @@ public class FindingController {
         @RequestParam(required = false) UUID assignedTo,
         @RequestParam(required = false) Boolean overdue,
         @RequestParam(defaultValue = "0") int page,
-        @RequestParam(defaultValue = "20") int size
+        @RequestParam(defaultValue = "20") int size,
+        @AuthenticationPrincipal JwtAuthFilter.AuthedUser me
     ) {
-        if (applicationId == null && status == null && severity == null && assignedTo == null && overdue == null) {
-            return service.list(PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "riskScore")));
-        }
-        return service.list(applicationId, status, severity, assignedTo, overdue, PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "riskScore")));
+        return service.list(applicationId, status, severity, assignedTo, overdue,
+            PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "riskScore")), me);
     }
 
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN','SECURITY_MANAGER','PENTESTER','ANALYST','DEVELOPER','VIEWER')")
-    public FindingDto get(@PathVariable UUID id) {
-        return service.get(id);
+    public FindingDto get(@PathVariable UUID id,
+                          @AuthenticationPrincipal JwtAuthFilter.AuthedUser me) {
+        return service.get(id, me);
     }
 
     @PatchMapping("/{id}/status")
     @PreAuthorize("hasAnyRole('ADMIN','SECURITY_MANAGER','ANALYST','DEVELOPER')")
     public FindingDto updateStatus(@PathVariable UUID id,
-                                   @Valid @RequestBody UpdateStatusRequest req) {
-        return service.updateStatus(id, req.status());
+                                   @Valid @RequestBody UpdateStatusRequest req,
+                                   @AuthenticationPrincipal JwtAuthFilter.AuthedUser me) {
+        return service.updateStatus(id, req.status(), me != null ? me.id() : null);
     }
 
     @RequestMapping(value = "/{id}/assign", method = {RequestMethod.POST, RequestMethod.PATCH})

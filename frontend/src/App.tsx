@@ -20,9 +20,16 @@ import { AuditPage } from "@/pages/AuditPage";
 import { UsersPage } from "@/pages/UsersPage";
 import { AlertsPage } from "@/pages/AlertsPage";
 import { ApplicationsPage } from "@/pages/ApplicationsPage";
+import { EventsPage } from "@/pages/EventsPage";
 
 const qc = new QueryClient({
-  defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false, staleTime: 30_000 } },
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: true,
+      staleTime: 2000,
+    },
+  },
 });
 
 function Protected({ children }: { children: React.ReactNode }) {
@@ -109,6 +116,12 @@ export default function App() {
               <Route path="applications" element={
                 <RoleProtectedRoute roles={["ADMIN","SECURITY_MANAGER","ANALYST","DEVELOPER","PENTESTER"]}>
                   <ApplicationsPage />
+                </RoleProtectedRoute>
+              } />
+
+              <Route path="events" element={
+                <RoleProtectedRoute roles={["ADMIN","SECURITY_MANAGER","ANALYST","DEVELOPER","PENTESTER","VIEWER"]}>
+                  <EventsPage />
                 </RoleProtectedRoute>
               } />
 

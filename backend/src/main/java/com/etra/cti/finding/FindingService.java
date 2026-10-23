@@ -145,7 +145,7 @@ public class FindingService {
     }
 
     public Page<FindingDto> list(Pageable pageable) {
-        return findings.findAllByOrderByRiskScoreDesc(pageable).map(FindingDto::from);
+        return list(null, null, null, null, null, pageable, null);
     }
 
     public Page<FindingDto> list(UUID applicationId,
@@ -154,10 +154,51 @@ public class FindingService {
                                  UUID assignedTo,
                                  Boolean overdue,
                                  Pageable pageable) {
+        return list(applicationId, status, severity, assignedTo, overdue, pageable, null);
+    }
+
+    public Page<FindingDto> list(UUID applicationId,
+                                 FindingStatus status,
+                                 Severity severity,
+                                 UUID assignedTo,
+                                 Boolean overdue,
+                                 Pageable pageable,
+                                 com.etra.cti.auth.JwtAuthFilter.AuthedUser caller) {
+        List<UUID> allowedAppIds = null;
+        if (caller != null && !"ADMIN".equalsIgnoreCase(caller.role()) && !orgService.isPlatformStaff(caller.id())) {
+            List<UUID> orgIds = orgService.listMine(caller.id()).stream()
+                .map(com.etra.cti.organization.dto.OrganizationDto::id)
+                .toList();
+            if (orgIds.isEmpty()) {
+                if (applicationId != null) {
+                    throw new org.springframework.security.access.AccessDeniedException("Not authorized for application " + applicationId);
+                }
+                return Page.empty(pageable);
+            }
+            allowedAppIds = orgIds.stream()
+                .flatMap(orgId -> projects.findByOrganizationId(orgId).stream())
+                .flatMap(project -> apps.findByProjectId(project.getId()).stream())
+                .map(Application::getId)
+                .distinct()
+                .toList();
+            if (allowedAppIds.isEmpty()) {
+                if (applicationId != null) {
+                    throw new org.springframework.security.access.AccessDeniedException("Not authorized for application " + applicationId);
+                }
+                return Page.empty(pageable);
+            }
+            if (applicationId != null && !allowedAppIds.contains(applicationId)) {
+                throw new org.springframework.security.access.AccessDeniedException("Not authorized for application " + applicationId);
+            }
+        }
+
+        final List<UUID> scopedAppIds = allowedAppIds;
         Specification<Finding> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
             if (applicationId != null) {
                 predicates.add(cb.equal(root.get("applicationId"), applicationId));
+            } else if (scopedAppIds != null) {
+                predicates.add(root.get("applicationId").in(scopedAppIds));
             }
             if (status != null) {
                 predicates.add(cb.equal(root.get("status"), status));
@@ -182,21 +223,45 @@ public class FindingService {
         return findings.findByApplicationIdOrderByRiskScoreDesc(appId, pageable).map(FindingDto::from);
     }
 
-    public FindingDto get(UUID id) {
+    public FindingDto get(UUID id, com.etra.cti.auth.JwtAuthFilter.AuthedUser caller) {
         Finding f = findings.findById(id).orElseThrow(() -> new NotFoundException("Finding not found"));
+        if (caller != null && !"ADMIN".equalsIgnoreCase(caller.role())) {
+            Application app = apps.findById(f.getApplicationId()).orElseThrow(() -> new NotFoundException("Application not found"));
+            com.etra.cti.project.Project project = projects.findById(app.getProjectId()).orElseThrow(() -> new NotFoundException("Project not found"));
+            orgService.requireMember(project.getOrganizationId(), caller.id());
+        }
+        return FindingDto.from(f);
+    }
+
+    public FindingDto get(UUID id) {
+        return get(id, null);
+    }
+
+    private void validateAccess(Finding f, UUID userId) {
+        if (userId == null) return;
+        Application app = apps.findById(f.getApplicationId())
+            .orElseThrow(() -> new NotFoundException("Application not found"));
+        com.etra.cti.project.Project project = projects.findById(app.getProjectId())
+            .orElseThrow(() -> new NotFoundException("Project not found"));
+        orgService.requireMember(project.getOrganizationId(), userId);
+    }
+
+    @Transactional
+    public FindingDto updateStatus(UUID id, FindingStatus status, UUID userId) {
+        Finding f = findings.findById(id).orElseThrow(() -> new NotFoundException("Finding not found"));
+        validateAccess(f, userId);
+        FindingStatus old = f.getStatus();
+        f.setStatus(status);
+        findings.save(f);
+        audit.recordChange(userId, "FINDING_STATUS_CHANGED", "Finding", id.toString(),
+            Map.of("status", old.name()),
+            Map.of("status", status.name()));
         return FindingDto.from(f);
     }
 
     @Transactional
     public FindingDto updateStatus(UUID id, FindingStatus status) {
-        Finding f = findings.findById(id).orElseThrow(() -> new NotFoundException("Finding not found"));
-        FindingStatus old = f.getStatus();
-        f.setStatus(status);
-        findings.save(f);
-        audit.recordChange(null, "FINDING_STATUS_CHANGED", "Finding", id.toString(),
-            Map.of("status", old.name()),
-            Map.of("status", status.name()));
-        return FindingDto.from(f);
+        return updateStatus(id, status, null);
     }
 
     @Transactional
@@ -207,6 +272,7 @@ public class FindingService {
     @Transactional
     public FindingDto assign(UUID id, UUID assignedTo, Instant dueDate, UUID actorId) {
         Finding f = findings.findById(id).orElseThrow(() -> new NotFoundException("Finding not found"));
+        validateAccess(f, actorId);
         UUID oldAssignee = f.getAssignedTo();
         Instant oldDue = f.getDueDate();
         f.setAssignedTo(assignedTo);
@@ -226,6 +292,7 @@ public class FindingService {
     @Transactional
     public FindingDto setDueDate(UUID id, Instant dueDate, UUID actorId) {
         Finding f = findings.findById(id).orElseThrow(() -> new NotFoundException("Finding not found"));
+        validateAccess(f, actorId);
         Instant oldDue = f.getDueDate();
         f.setDueDate(dueDate);
         findings.save(f);
@@ -238,6 +305,7 @@ public class FindingService {
     @Transactional
     public FindingDto overridePriority(UUID id, OverridePriorityRequest req, UUID actorId) {
         Finding f = findings.findById(id).orElseThrow(() -> new NotFoundException("Finding not found"));
+        validateAccess(f, actorId);
         Severity oldSev = f.getSeverity();
         BigDecimal oldScore = f.getRiskScore();
 

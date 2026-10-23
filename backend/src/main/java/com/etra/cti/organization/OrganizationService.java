@@ -78,16 +78,35 @@ public class OrganizationService {
         members.save(m);
     }
 
+    public boolean isPlatformStaff(UUID userId) {
+        if (userId == null) return false;
+        User u = users.findById(userId).orElse(null);
+        return isPlatformStaff(u);
+    }
+
+    public boolean isPlatformStaff(User u) {
+        if (u == null) return false;
+        if (u.getRole() == UserRole.ADMIN) {
+            return true;
+        }
+        if (u.getEmail() != null && u.getEmail().toLowerCase().endsWith("@etra.et")) {
+            return true;
+        }
+        return orgs.findBySlug("etra-secops")
+            .map(secops -> members.findByOrganizationIdAndUserId(secops.getId(), u.getId()).isPresent())
+            .orElse(false);
+    }
+
     public OrganizationMember requireMember(UUID orgId, UUID userId) {
         return members.findByOrganizationIdAndUserId(orgId, userId)
             .orElseGet(() -> {
                 User u = users.findById(userId).orElseThrow(() -> new AccessDeniedException("User not found"));
-                if (u.getRole() == UserRole.ADMIN) {
-                    OrganizationMember syntheticAdmin = new OrganizationMember();
-                    syntheticAdmin.setOrganizationId(orgId);
-                    syntheticAdmin.setUserId(userId);
-                    syntheticAdmin.setRole(UserRole.ADMIN);
-                    return syntheticAdmin;
+                if (isPlatformStaff(u)) {
+                    OrganizationMember synthetic = new OrganizationMember();
+                    synthetic.setOrganizationId(orgId);
+                    synthetic.setUserId(userId);
+                    synthetic.setRole(u.getRole());
+                    return synthetic;
                 }
                 throw new AccessDeniedException("Not a member of this organization");
             });

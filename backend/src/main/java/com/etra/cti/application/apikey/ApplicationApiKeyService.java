@@ -66,9 +66,13 @@ public class ApplicationApiKeyService {
         String prefix = rawKey.substring(0, 16);
         String hash = sha256(rawKey);
 
+        String keyName = (req.name() != null && !req.name().isBlank())
+            ? req.name().trim()
+            : (app.getName() + " Ingestion Key");
+
         ApplicationApiKey apiKey = new ApplicationApiKey();
         apiKey.setApplicationId(applicationId);
-        apiKey.setName(req.name());
+        apiKey.setName(keyName);
         apiKey.setKeyPrefix(prefix);
         apiKey.setKeyHash(hash);
         apiKey.setStatus(ApiKeyStatus.ACTIVE);
@@ -81,9 +85,9 @@ public class ApplicationApiKeyService {
         apiKeyRepo.save(apiKey);
 
         auditService.record(userId, "API_KEY_CREATED", "Application", applicationId.toString(),
-            Map.of("keyId", apiKey.getId().toString(), "keyPrefix", prefix, "name", req.name()));
+            Map.of("keyId", apiKey.getId().toString(), "keyPrefix", prefix, "name", keyName));
 
-        log.info(">>> Issued new API key {} ({}) for application {}", prefix, req.name(), applicationId);
+        log.info(">>> Issued new API key {} ({}) for application {}", prefix, keyName, applicationId);
         return ApiKeyCreatedResponse.of(apiKey, rawKey);
     }
 
