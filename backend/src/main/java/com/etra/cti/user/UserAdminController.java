@@ -23,11 +23,19 @@ public class UserAdminController {
     private final UserRepository users;
     private final AuthService auth;
     private final AuditService audit;
+    private final com.etra.cti.organization.OrganizationRepository orgs;
+    private final com.etra.cti.organization.OrganizationMemberRepository orgMembers;
 
-    public UserAdminController(UserRepository users, AuthService auth, AuditService audit) {
+    public UserAdminController(UserRepository users,
+                               AuthService auth,
+                               AuditService audit,
+                               @org.springframework.beans.factory.annotation.Autowired(required = false) com.etra.cti.organization.OrganizationRepository orgs,
+                               @org.springframework.beans.factory.annotation.Autowired(required = false) com.etra.cti.organization.OrganizationMemberRepository orgMembers) {
         this.users = users;
         this.auth = auth;
         this.audit = audit;
+        this.orgs = orgs;
+        this.orgMembers = orgMembers;
     }
 
     @GetMapping
@@ -48,10 +56,47 @@ public class UserAdminController {
     @PreAuthorize("hasRole('ADMIN')")
     public UserDto create(@Valid @RequestBody CreateUserRequest req,
                           @AuthenticationPrincipal JwtAuthFilter.AuthedUser me) {
-        UserDto created = auth.register(new RegisterRequest(req.email(), req.password(), req.fullName()));
+        String cleanEmail = req.email().trim().toLowerCase();
+        String cleanName = req.fullName().trim();
+        UserRole targetRole = UserRole.VIEWER;
+        if (req.role() != null && !req.role().isBlank()) {
+            try {
+                targetRole = UserRole.valueOf(req.role().trim().toUpperCase());
+            } catch (IllegalArgumentException e) {
+                targetRole = UserRole.VIEWER;
+            }
+        }
+        UserDto created = auth.register(new RegisterRequest(cleanEmail, req.password(), cleanName));
         User u = users.findById(created.id()).orElseThrow();
-        u.setRole(UserRole.valueOf(req.role()));
+        u.setRole(targetRole);
         users.save(u);
+
+        if (orgMembers != null) {
+            List<com.etra.cti.organization.OrganizationMember> myMemberships = (me != null && me.id() != null)
+                ? orgMembers.findByUserId(me.id()) : List.of();
+            if (!myMemberships.isEmpty()) {
+                for (var om : myMemberships) {
+                    if (orgMembers.findByOrganizationIdAndUserId(om.getOrganizationId(), u.getId()).isEmpty()) {
+                        var newMember = new com.etra.cti.organization.OrganizationMember();
+                        newMember.setOrganizationId(om.getOrganizationId());
+                        newMember.setUserId(u.getId());
+                        newMember.setRole(targetRole);
+                        orgMembers.save(newMember);
+                    }
+                }
+            } else if (orgs != null) {
+                for (var o : orgs.findAll()) {
+                    if (orgMembers.findByOrganizationIdAndUserId(o.getId(), u.getId()).isEmpty()) {
+                        var newMember = new com.etra.cti.organization.OrganizationMember();
+                        newMember.setOrganizationId(o.getId());
+                        newMember.setUserId(u.getId());
+                        newMember.setRole(targetRole);
+                        orgMembers.save(newMember);
+                    }
+                }
+            }
+        }
+
         audit.record(me != null ? me.id() : null, "USER_CREATED_BY_ADMIN", "User", u.getId().toString(),
             Map.of("email", u.getEmail(), "role", u.getRole().name()));
         return UserDto.from(u);
@@ -64,7 +109,14 @@ public class UserAdminController {
                               @AuthenticationPrincipal JwtAuthFilter.AuthedUser me) {
         User u = users.findById(id).orElseThrow(() -> new NotFoundException("User not found"));
         UserRole oldRole = u.getRole();
-        UserRole newRole = UserRole.valueOf(body.get("role"));
+        String roleStr = body.get("role");
+        UserRole newRole = oldRole;
+        if (roleStr != null && !roleStr.isBlank()) {
+            try {
+                newRole = UserRole.valueOf(roleStr.trim().toUpperCase());
+            } catch (IllegalArgumentException ignored) {
+            }
+        }
         u.setRole(newRole);
         users.save(u);
         audit.recordChange(me != null ? me.id() : null, "USER_ROLE_CHANGED", "User", id.toString(),

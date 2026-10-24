@@ -15,10 +15,10 @@ public class EventNormalizer {
     public static Map<String, Object> normalize(IngestEventRequest req) {
         Map<String, Object> n = new HashMap<>();
         n.put("source", req.source() != null ? req.source().name() : "APPLICATION_LOG");
-        n.put("method", req.method());
-        n.put("path", redact(req.path()));
-        n.put("statusCode", req.statusCode());
-        n.put("userId", req.userId());
+        n.put("method", req.method() != null && !req.method().isBlank() ? req.method().trim().toUpperCase() : "POST");
+        n.put("path", redact(req.path() != null && !req.path().isBlank() ? req.path().trim() : "/"));
+        n.put("statusCode", req.statusCode() != null ? req.statusCode() : 200);
+        n.put("userId", req.userId() != null && !req.userId().isBlank() ? req.userId().trim() : "anonymous");
 
         if (req.path() != null) {
             int q = req.path().indexOf('?');

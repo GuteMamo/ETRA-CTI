@@ -65,7 +65,12 @@ api.interceptors.response.use(
 
 export function extractError(err: unknown): string {
   if (axios.isAxiosError(err)) {
-    const data = err.response?.data as { message?: string } | undefined;
+    const data = err.response?.data as { message?: string; details?: Record<string, string> } | undefined;
+    if (data?.details && typeof data.details === "object" && Object.keys(data.details).length > 0) {
+      return Object.entries(data.details)
+        .map(([k, v]) => `${k}: ${v}`)
+        .join(", ");
+    }
     if (data?.message) return data.message;
     if (err.message) return err.message;
   }

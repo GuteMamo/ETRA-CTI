@@ -27,6 +27,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -74,32 +75,45 @@ public class EventService {
 
     @Transactional
     public EventDto ingest(IngestEventRequest req, JwtAuthFilter.AuthedUser caller) {
-        Application app = apps.findById(req.applicationId())
-            .orElseThrow(() -> new NotFoundException("Application not found"));
+        UUID targetAppId = req.applicationId();
 
         if (caller != null) {
             if ("APPLICATION".equalsIgnoreCase(caller.role())) {
-                if (!req.applicationId().equals(caller.id())) {
+                if (targetAppId == null) {
+                    targetAppId = caller.id();
+                } else if (!targetAppId.equals(caller.id())) {
                     log.warn(">>> BOLA/IDOR attempt: API key for app {} attempted to submit event for app {}",
-                        caller.id(), req.applicationId());
-                    throw new AccessDeniedException("API key is not authorized for application " + req.applicationId());
+                        caller.id(), targetAppId);
+                    throw new AccessDeniedException("API key is not authorized for application " + targetAppId);
                 }
             } else {
+                if (targetAppId == null) {
+                    throw new IllegalArgumentException("Application ID is required when not authenticating via an Application API key");
+                }
+                Application app = apps.findById(targetAppId)
+                    .orElseThrow(() -> new NotFoundException("Application not found"));
                 Project p = projects.findById(app.getProjectId())
                     .orElseThrow(() -> new NotFoundException("Project not found"));
                 orgService.requireMember(p.getOrganizationId(), caller.id());
             }
         }
 
+        if (targetAppId == null) {
+            throw new IllegalArgumentException("Application ID is required");
+        }
+
+        Application app = apps.findById(targetAppId)
+            .orElseThrow(() -> new NotFoundException("Application not found"));
+
         SecurityEvent e = new SecurityEvent();
         e.setApplicationId(app.getId());
-        e.setSource(req.source());
-        e.setEventTime(req.timestamp());
-        e.setSourceIp(req.sourceIp());
-        e.setMethod(req.method());
-        e.setPath(EventNormalizer.redact(req.path()));
-        e.setStatusCode(req.statusCode());
-        e.setUserIdentifier(req.userId());
+        e.setSource(req.source() != null ? req.source() : EventSource.APPLICATION_LOG);
+        e.setEventTime(req.timestamp() != null ? req.timestamp() : Instant.now());
+        e.setSourceIp(req.sourceIp() != null && !req.sourceIp().isBlank() ? req.sourceIp().trim() : "127.0.0.1");
+        e.setMethod(req.method() != null && !req.method().isBlank() ? req.method().trim().toUpperCase() : "POST");
+        e.setPath(EventNormalizer.redact(req.path() != null && !req.path().isBlank() ? req.path().trim() : "/"));
+        e.setStatusCode(req.statusCode() != null ? req.statusCode() : 200);
+        e.setUserIdentifier(req.userId() != null && !req.userId().isBlank() ? req.userId().trim() : "anonymous");
         e.setRawPayload(EventNormalizer.redactPayload(req.metadata()));
         e.setNormalized(EventNormalizer.normalize(req));
         events.save(e);

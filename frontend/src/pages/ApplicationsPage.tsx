@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   KeyRound, Plus, Trash2, Copy, Check, ShieldCheck, Terminal, AlertCircle,
-  Activity, RefreshCw, Eye, X, Search, ExternalLink
+  Activity, RefreshCw, Eye, X, Search, ExternalLink, Send, Play, Code
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Header } from "@/components/layout/Header";
@@ -20,15 +20,26 @@ import type {
 
 export function ApplicationsPage() {
   const qc = useQueryClient();
-  const [selectedAppId, setSelectedAppId] = useState<string | null>(null);
+  const [selectedAppId, setSelectedAppId] = useState<string | null>(() => {
+    try {
+      const urlParam = new URLSearchParams(window.location.search).get("appId");
+      if (urlParam) return urlParam;
+      return localStorage.getItem("etra.selectedAppId");
+    } catch {
+      return null;
+    }
+  });
   const [newKeyName, setNewKeyName] = useState("");
   const [expiryDays, setExpiryDays] = useState("30");
   const [createdKey, setCreatedKey] = useState<ApiKeyCreatedResponse | null>(null);
   const [copied, setCopied] = useState(false);
+  const [copiedQuickstart, setCopiedQuickstart] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [eventSearch, setEventSearch] = useState("");
   const [inspectEvent, setInspectEvent] = useState<EventDto | null>(null);
   const [copiedEventId, setCopiedEventId] = useState<string | null>(null);
+  const [quickstartTab, setQuickstartTab] = useState<"curl" | "node" | "python">("curl");
+  const [simulatingEvent, setSimulatingEvent] = useState(false);
 
   // Application search filter for 60+ applications
   const [appSearch, setAppSearch] = useState("");
@@ -61,6 +72,22 @@ export function ApplicationsPage() {
   const currentApp = apps.find(a => a.id === selectedAppId) || apps[0];
   const activeAppId = currentApp?.id;
 
+  // Persist selectedAppId to localStorage and sync URL query parameter
+  useEffect(() => {
+    if (activeAppId) {
+      try {
+        localStorage.setItem("etra.selectedAppId", activeAppId);
+        const url = new URL(window.location.href);
+        if (url.searchParams.get("appId") !== activeAppId) {
+          url.searchParams.set("appId", activeAppId);
+          window.history.replaceState(null, "", url.toString());
+        }
+      } catch {
+        // ignore
+      }
+    }
+  }, [activeAppId]);
+
   // Fetch API keys for selected app
   const keysQ = useQuery({
     queryKey: ["api-keys", activeAppId],
@@ -80,6 +107,85 @@ export function ApplicationsPage() {
   });
 
   const appEvents = eventsQ.data?.content ?? [];
+
+  async function handleRefreshEvents() {
+    try {
+      await Promise.all([
+        eventsQ.refetch(),
+        qc.invalidateQueries({ queryKey: ["app-events", activeAppId] }),
+        qc.invalidateQueries({ queryKey: ["apps-all"] })
+      ]);
+      toast.info("Refreshed security events");
+    } catch (err) {
+      toast.error("Failed to refresh events: " + extractError(err));
+    }
+  }
+
+  async function handleSimulateEvent(preset?: "login_fail" | "sqli" | "probe" | "checkout") {
+    if (!activeAppId) return;
+    setSimulatingEvent(true);
+    try {
+      const samplePayloads = {
+        login_fail: {
+          applicationId: activeAppId,
+          source: "API_GATEWAY",
+          timestamp: new Date().toISOString(),
+          sourceIp: "198.51.100." + Math.floor(Math.random() * 200 + 10),
+          method: "POST",
+          path: "/api/v1/auth/login",
+          statusCode: 401,
+          userId: "user_" + Math.floor(Math.random() * 9000 + 1000),
+          metadata: { userAgent: "Mozilla/5.0", reason: "invalid_password", attempt: 1 }
+        },
+        sqli: {
+          applicationId: activeAppId,
+          source: "API_GATEWAY",
+          timestamp: new Date().toISOString(),
+          sourceIp: "203.0.113.195",
+          method: "POST",
+          path: "/api/v1/search?q=1' UNION SELECT username,password FROM users--",
+          statusCode: 200,
+          userId: "session_" + Math.floor(Math.random() * 1000),
+          metadata: { attackType: "SQL_INJECTION", queryPattern: "UNION SELECT" }
+        },
+        probe: {
+          applicationId: activeAppId,
+          source: "APPLICATION_LOG",
+          timestamp: new Date().toISOString(),
+          sourceIp: "192.0.2.78",
+          method: "GET",
+          path: "/.env",
+          statusCode: 404,
+          userId: "crawler_bot",
+          metadata: { scanner: "Automated Path Probe", referer: "http://scanner.recon" }
+        },
+        checkout: {
+          applicationId: activeAppId,
+          source: "API_GATEWAY",
+          timestamp: new Date().toISOString(),
+          sourceIp: "198.51.100.22",
+          method: "POST",
+          path: "/api/v1/checkout",
+          statusCode: 200,
+          userId: "customer_" + Math.floor(Math.random() * 5000),
+          metadata: { orderTotal: 149.99, currency: "ETB" }
+        }
+      };
+
+      const payload = samplePayloads[preset || "login_fail"];
+      const res = await api.post<EventDto>("/events", payload);
+      toast.success(`Security event ingested! ID: ${res.data.id.substring(0, 8)}...`);
+      await Promise.all([
+        eventsQ.refetch(),
+        qc.invalidateQueries({ queryKey: ["app-events", activeAppId] }),
+        qc.invalidateQueries({ queryKey: ["events-list"] })
+      ]);
+    } catch (err) {
+      toast.error("Failed to ingest test event: " + extractError(err));
+    } finally {
+      setSimulatingEvent(false);
+    }
+  }
 
   function getMethodBadge(method?: string) {
     if (!method) return null;
@@ -131,8 +237,11 @@ export function ApplicationsPage() {
         projectId: targetProjectId || undefined,
       });
       toast.success(`Application "${res.data.name}" registered successfully!`);
-      qc.invalidateQueries({ queryKey: ["apps-all"] });
+      try {
+        localStorage.setItem("etra.selectedAppId", res.data.id);
+      } catch {}
       setSelectedAppId(res.data.id);
+      await qc.invalidateQueries({ queryKey: ["apps-all"] });
       setShowRegisterModal(false);
       setRegisterName("");
       setRegisterBaseUrl("");
@@ -466,20 +575,85 @@ export function ApplicationsPage() {
                 {/* Integration Quickstart */}
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <Terminal className="h-4 w-4 text-emerald-400" />
-                      <span>Integration Quickstart</span>
-                    </CardTitle>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <Terminal className="h-4 w-4 text-emerald-400" />
+                        <span>Integration Quickstart</span>
+                      </CardTitle>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setQuickstartTab("curl")}
+                          className={`px-2.5 py-1 text-xs rounded font-medium transition-colors ${
+                            quickstartTab === "curl"
+                              ? "bg-blue-600 text-white"
+                              : "bg-slate-900 text-slate-400 hover:text-slate-200"
+                          }`}
+                        >
+                          cURL
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setQuickstartTab("node")}
+                          className={`px-2.5 py-1 text-xs rounded font-medium transition-colors ${
+                            quickstartTab === "node"
+                              ? "bg-blue-600 text-white"
+                              : "bg-slate-900 text-slate-400 hover:text-slate-200"
+                          }`}
+                        >
+                          Node.js
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setQuickstartTab("python")}
+                          className={`px-2.5 py-1 text-xs rounded font-medium transition-colors ${
+                            quickstartTab === "python"
+                              ? "bg-blue-600 text-white"
+                              : "bg-slate-900 text-slate-400 hover:text-slate-200"
+                          }`}
+                        >
+                          Python
+                        </button>
+                      </div>
+                    </div>
                   </CardHeader>
                   <CardContent className="space-y-3">
-                    <p className="text-xs text-slate-300">
-                      Send authorized security events to ETRA-CTI from your external server using <code className="text-blue-400">POST /api/events</code>:
-                    </p>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-300">
+                      <p>
+                        Send telemetry from your application to ETRA-CTI via <code className="text-blue-400 font-mono">POST /api/events</code>:
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            const activeKeyStr = createdKey?.rawApiKey || (keys.length > 0 ? (keys[0].keyPrefix + "...") : "<your-api-key>");
+                            let snippet = "";
+                            if (quickstartTab === "curl") {
+                              snippet = `curl -X POST http://localhost:8081/api/events \\\n  -H "Content-Type: application/json" \\\n  -H "X-ETRA-API-KEY: ${activeKeyStr}" \\\n  -d '{\n    "applicationId": "${currentApp.id}",\n    "source": "API_GATEWAY",\n    "timestamp": "${new Date().toISOString()}",\n    "sourceIp": "198.51.100.22",\n    "method": "POST",\n    "path": "/api/v1/auth/login",\n    "statusCode": 401,\n    "userId": "user_1029",\n    "metadata": { "userAgent": "curl/8.0", "reason": "invalid_credentials" }\n  }'`;
+                            } else if (quickstartTab === "node") {
+                              snippet = `const res = await fetch("http://localhost:8081/api/events", {\n  method: "POST",\n  headers: {\n    "Content-Type": "application/json",\n    "X-ETRA-API-KEY": "${activeKeyStr}"\n  },\n  body: JSON.stringify({\n    applicationId: "${currentApp.id}",\n    source: "API_GATEWAY",\n    timestamp: new Date().toISOString(),\n    sourceIp: "198.51.100.22",\n    method: "POST",\n    path: "/api/v1/checkout",\n    statusCode: 200,\n    userId: "user_491",\n    metadata: { orderTotal: 99.50 }\n  })\n});\nconst data = await res.json();\nconsole.log("Event ID:", data.id);`;
+                            } else {
+                              snippet = `import json, urllib.request\n\npayload = {\n    "applicationId": "${currentApp.id}",\n    "source": "APPLICATION_LOG",\n    "sourceIp": "198.51.100.22",\n    "method": "POST",\n    "path": "/api/v1/auth/login",\n    "statusCode": 401,\n    "userId": "user_1029",\n    "metadata": {"scanner": "probe"}\n}\n\nreq = urllib.request.Request(\n    "http://localhost:8081/api/events",\n    data=json.dumps(payload).encode("utf-8"),\n    headers={\n        "Content-Type": "application/json",\n        "X-ETRA-API-KEY": "${activeKeyStr}"\n    },\n    method="POST"\n)\nwith urllib.request.urlopen(req) as resp:\n    print("Ingested event ID:", json.loads(resp.read().decode())["id"])`;
+                            }
+                            copyToClipboard(snippet);
+                            setCopiedQuickstart(true);
+                            setTimeout(() => setCopiedQuickstart(false), 2000);
+                          }}
+                          className="h-7 text-xs bg-slate-900 border-slate-700 hover:border-slate-600"
+                        >
+                          {copiedQuickstart ? <Check className="h-3 w-3 text-emerald-400 mr-1" /> : <Copy className="h-3 w-3 mr-1" />}
+                          <span>{copiedQuickstart ? "Copied Snippet" : "Copy Code"}</span>
+                        </Button>
+                      </div>
+                    </div>
+
                     <div className="bg-slate-950 border border-slate-800 rounded-lg p-3 overflow-x-auto">
                       <pre className="text-xs font-mono text-slate-300">
-                        {`curl -X POST http://localhost:8081/api/events \\
+                        {quickstartTab === "curl" &&
+                          `curl -X POST http://localhost:8081/api/events \\
   -H "Content-Type: application/json" \\
-  -H "X-ETRA-API-KEY: <your-api-key>" \\
+  -H "X-ETRA-API-KEY: ${createdKey?.rawApiKey || (keys.length > 0 ? (keys[0].keyPrefix + "...") : "<your-api-key>")} \\
   -d '{
     "applicationId": "${currentApp.id}",
     "source": "API_GATEWAY",
@@ -491,7 +665,99 @@ export function ApplicationsPage() {
     "userId": "user_1029",
     "metadata": { "userAgent": "curl/8.0", "reason": "invalid_credentials" }
   }'`}
+                        {quickstartTab === "node" &&
+                          `// Node.js 18+ native fetch / Express middleware integration
+const res = await fetch("http://localhost:8081/api/events", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "X-ETRA-API-KEY": "${createdKey?.rawApiKey || (keys.length > 0 ? (keys[0].keyPrefix + "...") : "<your-api-key>")}"
+  },
+  body: JSON.stringify({
+    applicationId: "${currentApp.id}",
+    source: "API_GATEWAY",
+    timestamp: new Date().toISOString(),
+    sourceIp: "198.51.100.22",
+    method: "POST",
+    path: "/api/v1/checkout",
+    statusCode: 200,
+    userId: "user_491",
+    metadata: { orderTotal: 99.50 }
+  })
+});
+const data = await res.json();
+console.log("Event ID:", data.id);`}
+                        {quickstartTab === "python" &&
+                          `# Python 3 / Flask / FastAPI security event telemetry
+import json, urllib.request
+
+payload = {
+    "applicationId": "${currentApp.id}",
+    "source": "APPLICATION_LOG",
+    "sourceIp": "198.51.100.22",
+    "method": "POST",
+    "path": "/api/v1/auth/login",
+    "statusCode": 401,
+    "userId": "user_1029",
+    "metadata": {"scanner": "probe"}
+}
+
+req = urllib.request.Request(
+    "http://localhost:8081/api/events",
+    data=json.dumps(payload).encode("utf-8"),
+    headers={
+        "Content-Type": "application/json",
+        "X-ETRA-API-KEY": "${createdKey?.rawApiKey || (keys.length > 0 ? (keys[0].keyPrefix + "...") : "<your-api-key>")}"
+    },
+    method="POST"
+)
+with urllib.request.urlopen(req) as resp:
+    print("Ingested event ID:", json.loads(resp.read().decode())["id"])`}
                       </pre>
+                    </div>
+
+                    {/* Quick Simulation Bar */}
+                    <div className="pt-1 flex flex-wrap items-center gap-2 text-xs border-t border-slate-800/80">
+                      <span className="text-slate-400 font-medium flex items-center gap-1">
+                        <Play className="h-3.5 w-3.5 text-blue-400" />
+                        Simulate Event:
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleSimulateEvent("login_fail")}
+                        disabled={simulatingEvent}
+                        className="h-7 text-xs bg-slate-900 border-slate-700 hover:border-amber-500/50 hover:text-amber-300"
+                      >
+                        401 Auth Failure
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleSimulateEvent("sqli")}
+                        disabled={simulatingEvent}
+                        className="h-7 text-xs bg-slate-900 border-slate-700 hover:border-red-500/50 hover:text-red-300"
+                      >
+                        SQLi Attack
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleSimulateEvent("probe")}
+                        disabled={simulatingEvent}
+                        className="h-7 text-xs bg-slate-900 border-slate-700 hover:border-blue-500/50 hover:text-blue-300"
+                      >
+                        /.env Probe
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleSimulateEvent("checkout")}
+                        disabled={simulatingEvent}
+                        className="h-7 text-xs bg-slate-900 border-slate-700 hover:border-emerald-500/50 hover:text-emerald-300"
+                      >
+                        200 Checkout
+                      </Button>
                     </div>
                   </CardContent>
                 </Card>
@@ -518,17 +784,25 @@ export function ApplicationsPage() {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => {
-                            qc.invalidateQueries({ queryKey: ["app-events", activeAppId] });
-                            toast.info("Refreshed events");
-                          }}
+                          onClick={() => handleSimulateEvent("login_fail")}
+                          disabled={simulatingEvent}
+                          className="h-8 text-xs shrink-0 text-blue-300 border-blue-500/30 hover:bg-blue-500/10"
+                          title="Instantly generate and ingest a test security event"
+                        >
+                          <Send className="h-3.5 w-3.5 mr-1" />
+                          Send Test Event
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={handleRefreshEvents}
                           disabled={eventsQ.isFetching}
                           className="h-8 text-xs shrink-0"
                         >
                           <RefreshCw className={`h-3.5 w-3.5 mr-1 ${eventsQ.isFetching ? "animate-spin" : ""}`} />
                           Refresh
                         </Button>
-                        <Link to="/events">
+                        <Link to={`/events?applicationId=${activeAppId}`}>
                           <Button size="sm" variant="ghost" className="h-8 text-xs text-blue-400 hover:text-blue-300">
                             Full View
                             <ExternalLink className="h-3 w-3 ml-1" />
