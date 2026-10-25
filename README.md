@@ -1,3 +1,17 @@
+#Group Members
+Name                                  ID
+
+1. Onesimos Mesfin                CTC-327-26
+2. Gutu Mamo                      CTC-1684-26
+3. Biniyam Getachew               CTC-200-26
+4. Addiskidan Aschalew            CTC-1022-26
+5. Natnael Endale                 CTC-004-26
+6. Ezra Destaw                    CTC-1585-26
+
+#VIDEO Description Link
+https://youtu.be/ssS5a3WTbM0
+
+
 # ETRA-CTI: Ethiopian Threat Recognition & Analysis Platform
 
 ETRA-CTI is an enterprise-grade application security event telemetry, threat intelligence, and vulnerability lifecycle platform. It provides continuous visibility into application-layer security events, ingests findings from industry scanners (OWASP ZAP, Burp Suite), executes deterministic and explainable detection rules, manages cryptographic evidence integrity, and governs the remediation and retesting lifecycle across organization tenants.
