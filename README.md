@@ -1,12 +1,12 @@
 # Group Members
-Name                                  ID
+Name................................ID
 
-1. Onesimos Mesfin                CTC-327-26
-2. Gutu Mamo                      CTC-1684-26
-3. Biniyam Getachew               CTC-200-26
-4. Addiskidan Aschalew            CTC-1022-26
-5. Natnael Endale                 CTC-004-26
-6. Ezra Destaw                    CTC-1585-26
+1. Onesimos Mesfin................CTC-327-26
+2. Gutu Mamo......................CTC-1684-26
+3. Biniyam Getachew...............CTC-200-26
+4. Addiskidan Aschalew............CTC-1022-26
+5. Natnael Endale.................CTC-004-26
+6. Ezra Destaw....................CTC-1585-26
 
 # VIDEO Description Link
 https://youtu.be/ssS5a3WTbM0
