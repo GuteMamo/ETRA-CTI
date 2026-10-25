@@ -11,12 +11,11 @@ Name                                  ID
 # VIDEO Description Link
 https://youtu.be/ssS5a3WTbM0
 
-# Final Project Report: Ethiopian Threat Recognition and Analysis (ETRA-CTI)
+# Project Report: Ethiopian Threat Recognition and Analysis (ETRA-CTI)
 
 **Project Name:** Ethiopian Threat Recognition and Analysis (ETRA-CTI)  
 **System Type:** Enterprise Cyber Threat Intelligence (CTI), Application Security Telemetry & Remediation Platform  
 **Target Environment:** Critical National Infrastructure, Financial Services, and Enterprise Web/Mobile Applications in Ethiopia  
-**Repository Location:** `C:\dev\etra-cti`  
 **Date:** October 2026  
 **Document Classification:** Final Project Technical Report  
 
