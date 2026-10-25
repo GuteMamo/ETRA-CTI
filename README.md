@@ -1,4 +1,4 @@
-#Group Members
+# Group Members
 Name                                  ID
 
 1. Onesimos Mesfin                CTC-327-26
@@ -8,7 +8,7 @@ Name                                  ID
 5. Natnael Endale                 CTC-004-26
 6. Ezra Destaw                    CTC-1585-26
 
-#VIDEO Description Link
+# VIDEO Description Link
 https://youtu.be/ssS5a3WTbM0
 
 
